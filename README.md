@@ -1,0 +1,2 @@
+# BasicInfrastructureSystem
+MCC基盤システムのモノレポ
