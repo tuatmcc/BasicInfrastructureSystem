@@ -8,4 +8,11 @@ MCC基盤システムのモノレポ
 uv sync
 cd DiscordConnector/ControlInterface
 uv run uvicorn main:app --reload
+#モックモード
+#MOCK_MODE=true uv run uvicorn main:app --reload
+```
+テスト実行
+```
+cd DiscordConnector/ControlInterface
+uv run pytest tests/ -v
 ```

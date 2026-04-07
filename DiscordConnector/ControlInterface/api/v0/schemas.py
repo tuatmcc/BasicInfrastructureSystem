@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # Role schemas
@@ -9,13 +9,12 @@ class RoleCreate(BaseModel):
 
 
 class RoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     color: tuple[int, int, int]
     position: int
-
-    class Config:
-        from_attributes = True
 
 
 class RoleDelete(BaseModel):
@@ -30,13 +29,12 @@ class ChannelCreate(BaseModel):
 
 
 class ChannelResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     category_id: int
     position: int
-
-    class Config:
-        from_attributes = True
 
 
 class ChannelDelete(BaseModel):
@@ -54,12 +52,11 @@ class CategoryCreate(BaseModel):
 
 
 class CategoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     position: int
-
-    class Config:
-        from_attributes = True
 
 
 class CategoryDelete(BaseModel):
@@ -68,11 +65,10 @@ class CategoryDelete(BaseModel):
 
 # Member schemas
 class MemberResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
-
-    class Config:
-        from_attributes = True
 
 
 class MemberBan(BaseModel):
@@ -90,13 +86,12 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     content: str
     author_id: int
     channel_id: int
-
-    class Config:
-        from_attributes = True
 
 
 class MessageDelete(BaseModel):
@@ -106,13 +101,12 @@ class MessageDelete(BaseModel):
 
 # Reaction schemas
 class ReactionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     emoji: str
     member_ids: list[int]
     me: bool
     message_id: int
-
-    class Config:
-        from_attributes = True
 
 
 class ReactionQuery(BaseModel):
