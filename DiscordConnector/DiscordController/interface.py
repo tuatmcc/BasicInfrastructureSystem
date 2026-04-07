@@ -8,11 +8,12 @@ class IDiscordController(Protocol):
 
 # 要　プロパティ追加
 class Role:
-    def __init__(self, id_: int, name: str, color: tuple[int, int, int], position: int):
+    def __init__(self, id_: int, name: str, color: tuple[int, int, int], position: int, permissions: int = 0):
         self.id = id_
         self.name = name
         self.color = color
         self.position = position
+        self.permissions = permissions
 
 # positionはカテゴリ内での値
 class Channel:

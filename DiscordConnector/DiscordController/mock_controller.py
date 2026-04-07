@@ -63,6 +63,7 @@ class MockDiscordController(IDiscordController):
             name=name,
             color=color or (0, 0, 0),
             position=position or 1,
+            permissions=0,
         )
 
     async def delete_role(self, id: int) -> bool:
@@ -72,9 +73,9 @@ class MockDiscordController(IDiscordController):
     async def list_roles(self) -> list[Role]:
         logger.info("Mock: Listing roles")
         return [
-            Role(id_=100, name="Admin", color=(255, 0, 0), position=10),
-            Role(id_=101, name="Moderator", color=(0, 255, 0), position=5),
-            Role(id_=102, name="Member", color=(0, 0, 255), position=1),
+            Role(id_=100, name="Admin", color=(255, 0, 0), position=10, permissions=8),
+            Role(id_=101, name="Moderator", color=(0, 255, 0), position=5, permissions=4),
+            Role(id_=102, name="Member", color=(0, 0, 255), position=1, permissions=0),
         ]
 
     async def list_role_members(self, role_id: int) -> list[Member]:
@@ -113,7 +114,7 @@ class MockDiscordController(IDiscordController):
     async def list_channel_roles(self, channel_id: int) -> list[Role]:
         logger.info(f"Mock: Listing roles for channel {channel_id}")
         return [
-            Role(id_=100, name="Admin", color=(255, 0, 0), position=10),
+            Role(id_=100, name="Admin", color=(255, 0, 0), position=10, permissions=8),
         ]
 
     async def create_category(
@@ -148,7 +149,7 @@ class MockDiscordController(IDiscordController):
     async def list_member_roles(self, member_id: int) -> list[Role]:
         logger.info(f"Mock: Listing roles for member {member_id}")
         return [
-            Role(id_=102, name="Member", color=(0, 0, 255), position=1),
+            Role(id_=102, name="Member", color=(0, 0, 255), position=1, permissions=0),
         ]
 
     async def ban_member(self, id: int) -> bool:

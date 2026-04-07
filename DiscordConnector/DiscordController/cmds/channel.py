@@ -41,4 +41,4 @@ async def list_roles(channel_id: int, guild: discord.Guild) -> list[Role]:
         tc = guild.get_channel(channel_id)
         return tc.changed_roles
     except AttributeError as e:
-        raise DiscordError(f"No such channel found: {changed_id}") from e
+        raise DiscordError(f"No such channel found: {channel_id}") from e

@@ -9,3 +9,16 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "pydantic>=2.0.0",
 ]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.setuptools]
+py-modules = ["interface", "schemas", "models", "controller", "mock_controller", "database"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -15,7 +15,7 @@ async def create(name: str, color: tuple[int, int, int]|None, position: int|None
         raise DiscordError(f"HTTP error while creating role {name}") from e
     # TODO: discord.Role.positionは信用ならないらしい。毎回list_とって確認するか…？
     else:
-        return Role(r.id, r.name, r.color.to_rgb(), r.position)
+        return Role(r.id, r.name, r.color.to_rgb(), r.position, r.permissions.value)
 
 async def delete(id: int, guild: discord.Guild) -> bool:
     try:
@@ -33,7 +33,7 @@ async def delete(id: int, guild: discord.Guild) -> bool:
         return guild.get_role(id) == None
 
 async def list_(guild: discord.Guild) -> list[Role]:
-    return [Role(r.id, r.name, r.color.to_rgb(), i) for i, r in enumerate(guild.roles)]
+    return [Role(r.id, r.name, r.color.to_rgb(), i, r.permissions.value) for i, r in enumerate(guild.roles)]
 
 async def list_members(role_id, guild: discord.Guild) -> list[Member]:
     try:
