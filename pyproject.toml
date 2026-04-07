@@ -1,4 +1,5 @@
 [tool.uv.workspace]
 members = [
-  "DiscordConnector/DiscordController"
+  "DiscordConnector/DiscordController",
+  "DiscordConnector/ControlInterface"
 ]

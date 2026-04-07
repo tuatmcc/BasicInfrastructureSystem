@@ -1,0 +1,14 @@
+[project]
+name = "discord-connector-control-interface"
+version = "0.1.0"
+description = "HTTP API interface for Discord Controller"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "discord-controller-discord",
+]
+
+[tool.uv.sources]
+discord-controller-discord = { workspace = true }

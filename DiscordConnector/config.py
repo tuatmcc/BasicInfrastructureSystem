@@ -1,0 +1,63 @@
+"""Configuration module for DiscordConnector."""
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+def _parse_bool(value: str | None) -> bool:
+    """Parse a string value as a boolean."""
+    if value is None:
+        return False
+    return value.lower() in ("true", "1", "yes")
+
+
+def is_mock_mode() -> bool:
+    """Check if mock mode is enabled via MOCK_MODE environment variable."""
+    return _parse_bool(os.getenv("MOCK_MODE"))
+
+
+def get_discord_token() -> str | None:
+    """Get Discord bot token from environment."""
+    return os.getenv("DISCORD_BOT_TOKEN")
+
+
+def get_discord_guild_id() -> int | None:
+    """Get Discord guild ID from environment."""
+    value = os.getenv("DISCORD_GUILD_ID")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def validate_discord_config() -> None:
+    """Validate required Discord configuration.
+    
+    Raises:
+        ValueError: If required configuration is missing or invalid.
+    """
+    errors = []
+    
+    if not get_discord_token():
+        errors.append("DISCORD_BOT_TOKEN is not set")
+    
+    guild_id = os.getenv("DISCORD_GUILD_ID")
+    if not guild_id:
+        errors.append("DISCORD_GUILD_ID is not set")
+    elif get_discord_guild_id() is None:
+        errors.append(f"DISCORD_GUILD_ID must be an integer, got: {guild_id!r}")
+    
+    if errors:
+        raise ValueError(
+            "Discord configuration error:\n"
+            + "\n".join(f"  - {e}" for e in errors)
+            + "\n\nPlease set the required environment variables or use --mock mode."
+        )
+
+
+# Module-level flag for convenience
+MOCK_MODE = is_mock_mode()
