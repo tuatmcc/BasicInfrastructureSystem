@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.34.0",
     "discord-controller-discord",
+    "discord-database-controller",
 ]
 
 [project.optional-dependencies]
@@ -19,6 +20,7 @@ test = [
 
 [tool.uv.sources]
 discord-controller-discord = { workspace = true }
+discord-database-controller = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

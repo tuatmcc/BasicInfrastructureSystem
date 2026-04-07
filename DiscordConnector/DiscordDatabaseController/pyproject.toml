@@ -1,0 +1,11 @@
+[project]
+name = "discord-database-controller"
+version = "0.1.0"
+description = "Database controller for Discord server state management"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.0.0",
+]

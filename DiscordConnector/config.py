@@ -59,5 +59,14 @@ def validate_discord_config() -> None:
         )
 
 
+def get_database_url() -> str:
+    """Get database URL from environment.
+    
+    Defaults to SQLite database in current directory.
+    """
+    return os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./discord.db")
+
+
 # Module-level flag for convenience
 MOCK_MODE = is_mock_mode()
+DATABASE_URL = get_database_url()
