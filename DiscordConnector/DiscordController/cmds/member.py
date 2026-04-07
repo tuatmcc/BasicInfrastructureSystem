@@ -8,7 +8,7 @@ async def list_(guild: discord.Guild) -> list[Member]:
 async def list_roles(member_id: int, guild: discord.Guild) -> list[Role]:
     try:
         m = guild.get_member(member_id)
-        return [Role(r.id, r.name, r.color.to_rgb(), i) for i, r in enumerate(m.roles)]
+        return [Role(r.id, r.name, r.color.to_rgb(), i, r.permissions.value) for i, r in enumerate(m.roles)]
     except AttributeError as e:
         raise DiscordError(f"No such member found: {member_id}") from e
 

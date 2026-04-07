@@ -1,13 +1,26 @@
-import os
-from dotenv import load_dotenv
+import sys
+from pathlib import Path
 import logging
 import discord
 
+# Add parent directory to path for config import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from config import (
+    MOCK_MODE,
+    get_discord_token,
+    get_discord_guild_id,
+    validate_discord_config,
+)
+
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-token = os.getenv("DISCORD_BOT_TOKEN")
-guild_id = int(os.getenv("DISCORD_GUILD_ID"))
+# Validate configuration unless in mock mode
+if not MOCK_MODE:
+    validate_discord_config()
+
+token = get_discord_token()
+guild_id = get_discord_guild_id()
 
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)

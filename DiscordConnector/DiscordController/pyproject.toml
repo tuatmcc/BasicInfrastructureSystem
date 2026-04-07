@@ -8,3 +8,13 @@ dependencies = [
     "discord>=2.3.2",
     "dotenv>=0.9.9",
 ]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
