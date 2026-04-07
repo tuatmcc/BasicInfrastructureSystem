@@ -62,6 +62,34 @@ def mock_controller() -> MockDiscordController:
 
 
 @pytest.fixture
+def mock_db_controller():
+    """Create a MockDiscordDatabaseController for unit tests that don't need real DB."""
+    # Save current interface
+    saved_interface = sys.modules.get('interface')
+    
+    # Load DB controller's interface temporarily
+    db_interface = load_module_from_path(
+        "db_interface_temp",
+        _db_controller_path / "interface.py"
+    )
+    sys.modules['interface'] = db_interface
+    
+    try:
+        # Load DB mock controller
+        db_mock_module = load_module_from_path(
+            "db_mock_controller",
+            _db_controller_path / "mock_controller.py"
+        )
+        controller = db_mock_module.MockDiscordDatabaseController()
+    finally:
+        # Restore interface
+        if saved_interface:
+            sys.modules['interface'] = saved_interface
+    
+    return controller
+
+
+@pytest.fixture
 async def db_controller():
     """Create a DiscordDatabaseController with in-memory SQLite for each test."""
     # Save current interface module
@@ -104,19 +132,21 @@ async def db_controller():
 
 
 @pytest.fixture
-def client(mock_controller: MockDiscordController) -> Generator[TestClient, None, None]:
+def client(mock_controller: MockDiscordController, mock_db_controller) -> Generator[TestClient, None, None]:
     """Create a TestClient with mocked controller dependency."""
     import dependencies
     from main import app
 
-    # Override the controller dependency
+    # Override both controllers so lifespan doesn't try to create them
     dependencies._controller = mock_controller
+    dependencies._db_controller = mock_db_controller
 
     with TestClient(app) as test_client:
         yield test_client
 
-    # Restore original (though typically not needed in tests)
+    # Restore original
     dependencies._controller = None
+    dependencies._db_controller = None
 
 
 @pytest.fixture

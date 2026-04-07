@@ -24,6 +24,7 @@ members = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = [
+    "DiscordConnector/tests",
     "DiscordConnector/DiscordDatabaseController/tests",
     "DiscordConnector/DiscordController/tests",
     "DiscordConnector/ControlInterface/tests",
