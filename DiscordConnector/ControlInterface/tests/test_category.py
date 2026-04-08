@@ -1,70 +1,43 @@
-"""Tests for Category API endpoints."""
+"""Tests for CategoryService."""
+import pytest
 
 
-class TestCategoryCreate:
-    """Tests for POST /api/v0/category/create endpoint."""
+class TestCategoryServiceCreate:
+    """Tests for CategoryService.create_category."""
 
-    def test_create_category_with_all_fields(self, client):
-        response = client.post(
-            "/api/v0/category/create",
-            json={"name": "Test Category", "position": 5},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "Test Category"
-        assert data["position"] == 5
-        assert "id" in data
+    @pytest.mark.asyncio
+    async def test_create_category_with_all_fields(self, category_service):
+        category = await category_service.create_category("Test Category", 5)
+        assert category.name == "Test Category"
+        assert category.position == 5
+        assert category.id is not None
 
-    def test_create_category_with_name_only(self, client):
-        response = client.post(
-            "/api/v0/category/create",
-            json={"name": "Minimal Category"},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "Minimal Category"
-        assert "id" in data
-        assert "position" in data
-
-    def test_create_category_missing_name(self, client):
-        response = client.post(
-            "/api/v0/category/create",
-            json={},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_create_category_with_name_only(self, category_service):
+        category = await category_service.create_category("Minimal Category")
+        assert category.name == "Minimal Category"
+        assert category.id is not None
+        assert category.position is not None
 
 
-class TestCategoryDelete:
-    """Tests for POST /api/v0/category/delete endpoint."""
+class TestCategoryServiceDelete:
+    """Tests for CategoryService.delete_category."""
 
-    def test_delete_category(self, client):
-        response = client.post(
-            "/api/v0/category/delete",
-            json={"id": 12345},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-    def test_delete_category_missing_id(self, client):
-        response = client.post(
-            "/api/v0/category/delete",
-            json={},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_delete_category(self, category_service):
+        success = await category_service.delete_category(12345)
+        assert success is True
 
 
-class TestCategoryList:
-    """Tests for GET /api/v0/category/list endpoint."""
+class TestCategoryServiceList:
+    """Tests for CategoryService.list_categories."""
 
-    def test_list_categories(self, client):
-        response = client.get("/api/v0/category/list")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
-        # Verify structure
-        category = data[0]
-        assert "id" in category
-        assert "name" in category
-        assert "position" in category
+    @pytest.mark.asyncio
+    async def test_list_categories(self, category_service):
+        categories = await category_service.list_categories()
+        assert isinstance(categories, list)
+        assert len(categories) > 0
+        category = categories[0]
+        assert category.id is not None
+        assert category.name is not None
+        assert category.position is not None

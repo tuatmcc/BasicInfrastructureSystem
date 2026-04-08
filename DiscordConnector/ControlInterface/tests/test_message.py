@@ -1,92 +1,38 @@
-"""Tests for Message API endpoints."""
+"""Tests for MessageService."""
+import pytest
 
 
-class TestMessageCreate:
-    """Tests for POST /api/v0/message/create endpoint."""
+class TestMessageServiceCreate:
+    """Tests for MessageService.create_message."""
 
-    def test_create_message(self, client):
-        response = client.post(
-            "/api/v0/message/create",
-            json={"channel_id": 300, "content": "Hello, World!"},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["content"] == "Hello, World!"
-        assert data["channel_id"] == 300
-        assert "id" in data
-        assert "author_id" in data
-
-    def test_create_message_missing_channel_id(self, client):
-        response = client.post(
-            "/api/v0/message/create",
-            json={"content": "Hello"},
-        )
-        assert response.status_code == 422
-
-    def test_create_message_missing_content(self, client):
-        response = client.post(
-            "/api/v0/message/create",
-            json={"channel_id": 300},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_create_message(self, message_service):
+        message = await message_service.create_message(300, "Hello, World!")
+        assert message.content == "Hello, World!"
+        assert message.channel_id == 300
+        assert message.id is not None
+        assert message.author_id is not None
 
 
-class TestMessageDelete:
-    """Tests for POST /api/v0/message/delete endpoint."""
+class TestMessageServiceDelete:
+    """Tests for MessageService.delete_message."""
 
-    def test_delete_message(self, client):
-        response = client.post(
-            "/api/v0/message/delete",
-            json={"channel_id": 300, "message_id": 500},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-    def test_delete_message_missing_channel_id(self, client):
-        response = client.post(
-            "/api/v0/message/delete",
-            json={"message_id": 500},
-        )
-        assert response.status_code == 422
-
-    def test_delete_message_missing_message_id(self, client):
-        response = client.post(
-            "/api/v0/message/delete",
-            json={"channel_id": 300},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_delete_message(self, message_service):
+        success = await message_service.delete_message(300, 500)
+        assert success is True
 
 
-class TestReactionTotalling:
-    """Tests for GET /api/v0/message/reaction/totalling endpoint."""
+class TestMessageServiceReactions:
+    """Tests for MessageService.total_reactions."""
 
-    def test_totalling_reactions(self, client):
-        response = client.get(
-            "/api/v0/message/reaction/totalling",
-            params={"channel_id": 300, "message_id": 500},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        # Verify structure if reactions exist
-        if len(data) > 0:
-            reaction = data[0]
-            assert "emoji" in reaction
-            assert "member_ids" in reaction
-            assert "me" in reaction
-            assert "message_id" in reaction
-
-    def test_totalling_reactions_missing_channel_id(self, client):
-        response = client.get(
-            "/api/v0/message/reaction/totalling",
-            params={"message_id": 500},
-        )
-        assert response.status_code == 422
-
-    def test_totalling_reactions_missing_message_id(self, client):
-        response = client.get(
-            "/api/v0/message/reaction/totalling",
-            params={"channel_id": 300},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_total_reactions(self, message_service):
+        reactions = await message_service.total_reactions(300, 500)
+        assert isinstance(reactions, list)
+        if len(reactions) > 0:
+            reaction = reactions[0]
+            assert reaction.emoji is not None
+            assert reaction.member_ids is not None
+            assert reaction.me is not None
+            assert reaction.message_id is not None

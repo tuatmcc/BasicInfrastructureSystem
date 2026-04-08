@@ -1,77 +1,48 @@
-"""Tests for Member API endpoints."""
+"""Tests for MemberService."""
+import pytest
 
 
-class TestMemberList:
-    """Tests for GET /api/v0/member/list endpoint."""
+class TestMemberServiceList:
+    """Tests for MemberService.list_members."""
 
-    def test_list_members(self, client):
-        response = client.get("/api/v0/member/list")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
-        # Verify structure
-        member = data[0]
-        assert "id" in member
-        assert "name" in member
+    @pytest.mark.asyncio
+    async def test_list_members(self, member_service):
+        members = await member_service.list_members()
+        assert isinstance(members, list)
+        assert len(members) > 0
+        member = members[0]
+        assert member.id is not None
+        assert member.name is not None
 
 
-class TestMemberBan:
-    """Tests for POST /api/v0/member/ban endpoint."""
+class TestMemberServiceBan:
+    """Tests for MemberService.ban_member."""
 
-    def test_ban_member(self, client):
-        response = client.post(
-            "/api/v0/member/ban",
-            json={"id": 200},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-    def test_ban_member_missing_id(self, client):
-        response = client.post(
-            "/api/v0/member/ban",
-            json={},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_ban_member(self, member_service):
+        success = await member_service.ban_member(200)
+        assert success is True
 
 
-class TestMemberTimeout:
-    """Tests for POST /api/v0/member/timeout endpoint."""
+class TestMemberServiceTimeout:
+    """Tests for MemberService.timeout_member."""
 
-    def test_timeout_member(self, client):
-        response = client.post(
-            "/api/v0/member/timeout",
-            json={"id": 200},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-    def test_timeout_member_missing_id(self, client):
-        response = client.post(
-            "/api/v0/member/timeout",
-            json={},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_timeout_member(self, member_service):
+        success = await member_service.timeout_member(200)
+        assert success is True
 
 
-class TestMemberListRoles:
-    """Tests for GET /api/v0/member/list-roles endpoint."""
+class TestMemberServiceListRoles:
+    """Tests for MemberService.list_member_roles."""
 
-    def test_list_member_roles(self, client):
-        response = client.get("/api/v0/member/list-roles", params={"member_id": 200})
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        # Verify structure if roles exist
-        if len(data) > 0:
-            role = data[0]
-            assert "id" in role
-            assert "name" in role
-            assert "color" in role
-            assert "position" in role
-
-    def test_list_member_roles_missing_member_id(self, client):
-        response = client.get("/api/v0/member/list-roles")
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_list_member_roles(self, member_service):
+        roles = await member_service.list_member_roles(200)
+        assert isinstance(roles, list)
+        if len(roles) > 0:
+            role = roles[0]
+            assert role.id is not None
+            assert role.name is not None
+            assert role.color is not None
+            assert role.position is not None
