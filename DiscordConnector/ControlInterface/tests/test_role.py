@@ -1,92 +1,59 @@
-"""Tests for Role API endpoints."""
+"""Tests for RoleService."""
+import pytest
 
 
-class TestRoleCreate:
-    """Tests for POST /api/v0/role/create endpoint."""
+class TestRoleServiceCreate:
+    """Tests for RoleService.create_role."""
 
-    def test_create_role_with_all_fields(self, client):
-        response = client.post(
-            "/api/v0/role/create",
-            json={"name": "TestRole", "color": [255, 100, 50], "position": 5},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "TestRole"
-        assert data["color"] == [255, 100, 50]
-        assert data["position"] == 5
-        assert "id" in data
+    @pytest.mark.asyncio
+    async def test_create_role_with_all_fields(self, role_service):
+        role = await role_service.create_role("TestRole", (255, 100, 50), 5)
+        assert role.name == "TestRole"
+        assert role.color == (255, 100, 50)
+        assert role.position == 5
+        assert role.id is not None
 
-    def test_create_role_with_name_only(self, client):
-        response = client.post(
-            "/api/v0/role/create",
-            json={"name": "MinimalRole"},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["name"] == "MinimalRole"
-        assert "id" in data
-        assert "color" in data
-        assert "position" in data
-
-    def test_create_role_missing_name(self, client):
-        response = client.post(
-            "/api/v0/role/create",
-            json={},
-        )
-        assert response.status_code == 422  # Validation error
+    @pytest.mark.asyncio
+    async def test_create_role_with_name_only(self, role_service):
+        role = await role_service.create_role("MinimalRole")
+        assert role.name == "MinimalRole"
+        assert role.id is not None
+        assert role.color is not None
+        assert role.position is not None
 
 
-class TestRoleDelete:
-    """Tests for POST /api/v0/role/delete endpoint."""
+class TestRoleServiceDelete:
+    """Tests for RoleService.delete_role."""
 
-    def test_delete_role(self, client):
-        response = client.post(
-            "/api/v0/role/delete",
-            json={"id": 12345},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-
-    def test_delete_role_missing_id(self, client):
-        response = client.post(
-            "/api/v0/role/delete",
-            json={},
-        )
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_delete_role(self, role_service):
+        success = await role_service.delete_role(12345)
+        assert success is True
 
 
-class TestRoleList:
-    """Tests for GET /api/v0/role/list endpoint."""
+class TestRoleServiceList:
+    """Tests for RoleService.list_roles."""
 
-    def test_list_roles(self, client):
-        response = client.get("/api/v0/role/list")
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
-        # Verify structure of first role
-        role = data[0]
-        assert "id" in role
-        assert "name" in role
-        assert "color" in role
-        assert "position" in role
+    @pytest.mark.asyncio
+    async def test_list_roles(self, role_service):
+        roles = await role_service.list_roles()
+        assert isinstance(roles, list)
+        assert len(roles) > 0
+        role = roles[0]
+        assert role.id is not None
+        assert role.name is not None
+        assert role.color is not None
+        assert role.position is not None
 
 
-class TestRoleListMembers:
-    """Tests for GET /api/v0/role/list-members endpoint."""
+class TestRoleServiceListMembers:
+    """Tests for RoleService.list_role_members."""
 
-    def test_list_role_members(self, client):
-        response = client.get("/api/v0/role/list-members", params={"role_id": 100})
-        assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, list)
-        assert len(data) > 0
-        # Verify structure
-        member = data[0]
-        assert "id" in member
-        assert "name" in member
-
-    def test_list_role_members_missing_role_id(self, client):
-        response = client.get("/api/v0/role/list-members")
-        assert response.status_code == 422
+    @pytest.mark.asyncio
+    async def test_list_role_members(self, role_service):
+        members = await role_service.list_role_members(100)
+        assert isinstance(members, list)
+        assert len(members) > 0
+        member = members[0]
+        assert member.id is not None
+        assert member.name is not None

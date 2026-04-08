@@ -19,6 +19,7 @@ members = [
   "DiscordConnector/DiscordController",
   "DiscordConnector/ControlInterface",
   "DiscordConnector/DiscordDatabaseController",
+  "DiscordConnector/PublicAPI",
 ]
 
 [tool.pytest.ini_options]
@@ -28,4 +29,5 @@ testpaths = [
     "DiscordConnector/DiscordDatabaseController/tests",
     "DiscordConnector/DiscordController/tests",
     "DiscordConnector/ControlInterface/tests",
+    "DiscordConnector/PublicAPI/tests",
 ]

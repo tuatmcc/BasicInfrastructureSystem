@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 members = [
     "basic-infrastructure-system",
     "discord-connector-control-interface",
+    "discord-connector-public-api",
     "discord-controller-discord",
     "discord-database-controller",
 ]
@@ -272,10 +273,37 @@ wheels = [
 [[package]]
 name = "discord-connector-control-interface"
 version = "0.1.0"
-source = { virtual = "DiscordConnector/ControlInterface" }
+source = { editable = "DiscordConnector/ControlInterface" }
 dependencies = [
     { name = "discord-controller-discord" },
     { name = "discord-database-controller" },
+]
+
+[package.optional-dependencies]
+test = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "discord-controller-discord", editable = "DiscordConnector/DiscordController" },
+    { name = "discord-database-controller", editable = "DiscordConnector/DiscordDatabaseController" },
+    { name = "fastapi", marker = "extra == 'test'", specifier = ">=0.115.0" },
+    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.24.0" },
+]
+provides-extras = ["test"]
+
+[[package]]
+name = "discord-connector-public-api"
+version = "0.1.0"
+source = { virtual = "DiscordConnector/PublicAPI" }
+dependencies = [
+    { name = "discord-connector-control-interface" },
     { name = "fastapi" },
     { name = "uvicorn" },
 ]
@@ -289,8 +317,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "discord-controller-discord", editable = "DiscordConnector/DiscordController" },
-    { name = "discord-database-controller", editable = "DiscordConnector/DiscordDatabaseController" },
+    { name = "discord-connector-control-interface", editable = "DiscordConnector/ControlInterface" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
