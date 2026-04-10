@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Generator
+from typing import AsyncGenerator
 import importlib.util
 
 # Set MOCK_MODE before importing any project modules
@@ -38,7 +38,7 @@ _public_deps = load_module_from_path(
 )
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 # Load interface from DiscordController first
 _interface_module = load_module_from_path(
@@ -61,8 +61,8 @@ def mock_controller() -> MockDiscordController:
 
 
 @pytest.fixture
-def mock_db_controller():
-    """Create a MockDiscordDatabaseController for unit tests."""
+async def mock_db_controller():
+    """Create a connected MockDiscordDatabaseController for unit tests."""
     saved_interface = sys.modules.get('interface')
     
     db_interface = load_module_from_path(
@@ -77,18 +77,21 @@ def mock_db_controller():
             _db_controller_path / "mock_controller.py"
         )
         controller = db_mock_module.MockDiscordDatabaseController()
+        await controller.connect()
+        yield controller
+        await controller.disconnect()
     finally:
         if saved_interface:
             sys.modules['interface'] = saved_interface
-    
-    return controller
 
 
 @pytest.fixture
-def client(mock_controller: MockDiscordController, mock_db_controller) -> Generator[TestClient, None, None]:
-    """Create a TestClient with mocked dependencies."""
+async def client(
+    mock_controller: MockDiscordController,
+    mock_db_controller,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Create an AsyncClient with mocked dependencies."""
     from contextlib import asynccontextmanager
-    from typing import AsyncGenerator
     from fastapi import FastAPI
     
     # Import PublicAPI dependencies (already registered in sys.modules)
@@ -122,19 +125,35 @@ def client(mock_controller: MockDiscordController, mock_db_controller) -> Genera
         lifespan=test_lifespan,
     )
     app.include_router(v0_router, prefix="/api/v0")
+
+    async def get_role_service_override():
+        return role_service
+
+    async def get_channel_service_override():
+        return channel_service
+
+    async def get_category_service_override():
+        return category_service
+
+    async def get_member_service_override():
+        return member_service
+
+    async def get_message_service_override():
+        return message_service
     
     # Override dependencies to return our mock services
-    app.dependency_overrides[public_deps.get_role_service] = lambda: role_service
-    app.dependency_overrides[public_deps.get_channel_service] = lambda: channel_service
-    app.dependency_overrides[public_deps.get_category_service] = lambda: category_service
-    app.dependency_overrides[public_deps.get_member_service] = lambda: member_service
-    app.dependency_overrides[public_deps.get_message_service] = lambda: message_service
+    app.dependency_overrides[public_deps.get_role_service] = get_role_service_override
+    app.dependency_overrides[public_deps.get_channel_service] = get_channel_service_override
+    app.dependency_overrides[public_deps.get_category_service] = get_category_service_override
+    app.dependency_overrides[public_deps.get_member_service] = get_member_service_override
+    app.dependency_overrides[public_deps.get_message_service] = get_message_service_override
     
     @app.get("/health")
     async def health_check():
         return {"status": "ok"}
     
-    with TestClient(app) as test_client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
         yield test_client
     
     # Cleanup

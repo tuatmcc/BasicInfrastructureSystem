@@ -1,11 +1,15 @@
 """Tests for Channel API endpoints via PublicAPI."""
 
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
 
 class TestChannelCreate:
     """Tests for POST /api/v0/channel/create endpoint."""
 
-    def test_create_channel_with_all_fields(self, client):
-        response = client.post(
+    async def test_create_channel_with_all_fields(self, client):
+        response = await client.post(
             "/api/v0/channel/create",
             json={"name": "test-channel", "category_id": 100, "position": 3},
         )
@@ -16,8 +20,8 @@ class TestChannelCreate:
         assert data["position"] == 3
         assert "id" in data
 
-    def test_create_channel_with_name_only(self, client):
-        response = client.post(
+    async def test_create_channel_with_name_only(self, client):
+        response = await client.post(
             "/api/v0/channel/create",
             json={"name": "minimal-channel"},
         )
@@ -26,8 +30,8 @@ class TestChannelCreate:
         assert data["name"] == "minimal-channel"
         assert "id" in data
 
-    def test_create_channel_missing_name(self, client):
-        response = client.post(
+    async def test_create_channel_missing_name(self, client):
+        response = await client.post(
             "/api/v0/channel/create",
             json={},
         )
@@ -37,8 +41,8 @@ class TestChannelCreate:
 class TestChannelDelete:
     """Tests for POST /api/v0/channel/delete endpoint."""
 
-    def test_delete_channel(self, client):
-        response = client.post(
+    async def test_delete_channel(self, client):
+        response = await client.post(
             "/api/v0/channel/delete",
             json={"id": 12345},
         )
@@ -50,8 +54,8 @@ class TestChannelDelete:
 class TestChannelList:
     """Tests for GET /api/v0/channel/list endpoint."""
 
-    def test_list_channels(self, client):
-        response = client.get("/api/v0/channel/list")
+    async def test_list_channels(self, client):
+        response = await client.get("/api/v0/channel/list")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -66,8 +70,8 @@ class TestChannelList:
 class TestChannelListRole:
     """Tests for GET /api/v0/channel/list-role endpoint."""
 
-    def test_list_channel_roles(self, client):
-        response = client.get("/api/v0/channel/list-role", params={"channel_id": 100})
+    async def test_list_channel_roles(self, client):
+        response = await client.get("/api/v0/channel/list-role", params={"channel_id": 100})
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -78,6 +82,6 @@ class TestChannelListRole:
         assert "color" in role
         assert "position" in role
 
-    def test_list_channel_roles_missing_id(self, client):
-        response = client.get("/api/v0/channel/list-role")
+    async def test_list_channel_roles_missing_id(self, client):
+        response = await client.get("/api/v0/channel/list-role")
         assert response.status_code == 422

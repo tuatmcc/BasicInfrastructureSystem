@@ -1,11 +1,15 @@
 """Tests for Member API endpoints via PublicAPI."""
 
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
 
 class TestMemberList:
     """Tests for GET /api/v0/member/list endpoint."""
 
-    def test_list_members(self, client):
-        response = client.get("/api/v0/member/list")
+    async def test_list_members(self, client):
+        response = await client.get("/api/v0/member/list")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -18,8 +22,8 @@ class TestMemberList:
 class TestMemberBan:
     """Tests for POST /api/v0/member/ban endpoint."""
 
-    def test_ban_member(self, client):
-        response = client.post(
+    async def test_ban_member(self, client):
+        response = await client.post(
             "/api/v0/member/ban",
             json={"id": 12345},
         )
@@ -27,8 +31,8 @@ class TestMemberBan:
         data = response.json()
         assert data["success"] is True
 
-    def test_ban_member_missing_id(self, client):
-        response = client.post(
+    async def test_ban_member_missing_id(self, client):
+        response = await client.post(
             "/api/v0/member/ban",
             json={},
         )
@@ -38,8 +42,8 @@ class TestMemberBan:
 class TestMemberTimeout:
     """Tests for POST /api/v0/member/timeout endpoint."""
 
-    def test_timeout_member(self, client):
-        response = client.post(
+    async def test_timeout_member(self, client):
+        response = await client.post(
             "/api/v0/member/timeout",
             json={"id": 12345},
         )
@@ -51,8 +55,8 @@ class TestMemberTimeout:
 class TestMemberListRoles:
     """Tests for GET /api/v0/member/list-roles endpoint."""
 
-    def test_list_member_roles(self, client):
-        response = client.get("/api/v0/member/list-roles", params={"member_id": 100})
+    async def test_list_member_roles(self, client):
+        response = await client.get("/api/v0/member/list-roles", params={"member_id": 100})
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -63,6 +67,6 @@ class TestMemberListRoles:
         assert "color" in role
         assert "position" in role
 
-    def test_list_member_roles_missing_id(self, client):
-        response = client.get("/api/v0/member/list-roles")
+    async def test_list_member_roles_missing_id(self, client):
+        response = await client.get("/api/v0/member/list-roles")
         assert response.status_code == 422
