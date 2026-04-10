@@ -1,37 +1,15 @@
-"""Dependencies for PublicAPI.
-
-This module provides dependency injection for services.
-"""
+"""Dependencies for PublicAPI."""
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-import sys
-from pathlib import Path
 import logging
-import importlib.util
 
-# Load ControlInterface's dependencies module directly
-_control_interface_path = Path(__file__).parent.parent / "ControlInterface"
-
-def _load_module_from_path(module_name: str, file_path: Path):
-    """Load a module from an explicit file path."""
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-# Load ControlInterface dependencies
-_ci_deps = _load_module_from_path(
-    "control_interface_dependencies",
-    _control_interface_path / "dependencies.py"
+from DiscordConnector.ControlInterface.dependencies import (
+    get_controller,
+    get_db_controller,
+    lifespan as control_interface_lifespan,
 )
-control_interface_lifespan = _ci_deps.lifespan
-get_controller = _ci_deps.get_controller
-get_db_controller = _ci_deps.get_db_controller
-
-# Add ControlInterface to path for services import
-sys.path.insert(0, str(_control_interface_path))
-from services import (
+from DiscordConnector.ControlInterface.services import (
     RoleService,
     ChannelService,
     CategoryService,

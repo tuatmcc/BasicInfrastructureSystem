@@ -1,7 +1,8 @@
 """Tests for User CRUD operations."""
 
 import pytest
-from interface import DatabaseError
+
+from DiscordConnector.DiscordDatabaseController.interface import DatabaseError
 
 
 class TestUserCreate:

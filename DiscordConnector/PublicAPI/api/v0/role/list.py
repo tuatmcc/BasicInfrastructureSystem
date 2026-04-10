@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.dependencies import get_role_service
 from ..schemas import RoleResponse
-from dependencies import get_role_service
 
 router = APIRouter()
 

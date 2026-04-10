@@ -1,11 +1,15 @@
 """Tests for Category API endpoints via PublicAPI."""
 
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
 
 class TestCategoryCreate:
     """Tests for POST /api/v0/category/create endpoint."""
 
-    def test_create_category_with_all_fields(self, client):
-        response = client.post(
+    async def test_create_category_with_all_fields(self, client):
+        response = await client.post(
             "/api/v0/category/create",
             json={"name": "Test Category", "position": 2},
         )
@@ -15,8 +19,8 @@ class TestCategoryCreate:
         assert data["position"] == 2
         assert "id" in data
 
-    def test_create_category_with_name_only(self, client):
-        response = client.post(
+    async def test_create_category_with_name_only(self, client):
+        response = await client.post(
             "/api/v0/category/create",
             json={"name": "Minimal Category"},
         )
@@ -25,8 +29,8 @@ class TestCategoryCreate:
         assert data["name"] == "Minimal Category"
         assert "id" in data
 
-    def test_create_category_missing_name(self, client):
-        response = client.post(
+    async def test_create_category_missing_name(self, client):
+        response = await client.post(
             "/api/v0/category/create",
             json={},
         )
@@ -36,8 +40,8 @@ class TestCategoryCreate:
 class TestCategoryDelete:
     """Tests for POST /api/v0/category/delete endpoint."""
 
-    def test_delete_category(self, client):
-        response = client.post(
+    async def test_delete_category(self, client):
+        response = await client.post(
             "/api/v0/category/delete",
             json={"id": 12345},
         )
@@ -49,8 +53,8 @@ class TestCategoryDelete:
 class TestCategoryList:
     """Tests for GET /api/v0/category/list endpoint."""
 
-    def test_list_categories(self, client):
-        response = client.get("/api/v0/category/list")
+    async def test_list_categories(self, client):
+        response = await client.get("/api/v0/category/list")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)

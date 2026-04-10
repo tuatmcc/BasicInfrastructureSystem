@@ -1,7 +1,7 @@
 """Mock implementation of DiscordController for testing without Discord credentials."""
 
 import logging
-from interface import (
+from DiscordConnector.DiscordController.interface import (
     IDiscordController,
     Role,
     Channel,

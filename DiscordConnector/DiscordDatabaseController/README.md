@@ -4,7 +4,7 @@ Discord サーバーの状態を管理するためのデータベースコント
 
 ## 概要
 
-DiscordDatabaseController は、Discord サーバーのユーザー、ロール、カテゴリー、チャンネル情報を SQLite データベースで管理するコンポーネントです。DiscordController と同様のアーキテクチャ（Protocol ベースのインターフェース）で設計されています。
+DiscordDatabaseController は、Discord サーバーのユーザー、ロール、カテゴリー、チャンネル情報を Supabase の PostgreSQL で管理するコンポーネントです。DiscordController と同様のアーキテクチャ（Protocol ベースのインターフェース）で設計されています。
 
 ## アーキテクチャ
 
@@ -20,7 +20,7 @@ ControlInterface
 | ファイル | 説明 |
 |---------|------|
 | `interface.py` | `IDiscordDatabaseController` Protocol と データクラス定義 |
-| `controller.py` | SQLite を使用した実装 |
+| `controller.py` | Supabase(Postgres) を使用した実装 |
 | `mock_controller.py` | テスト用のインメモリモック実装 |
 | `database.py` | SQLAlchemy async engine 設定 |
 | `models.py` | ORM モデル定義 |
@@ -46,7 +46,9 @@ async def list_users():
 ```python
 from controller import DiscordDatabaseController
 
-async with DiscordDatabaseController("sqlite+aiosqlite:///./discord.db") as db:
+async with DiscordDatabaseController(
+    "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres"
+) as db:
     # ユーザー操作
     user = await db.create_user("123456789", "TestUser", "M001")
     users = await db.get_users()
@@ -64,7 +66,7 @@ async with DiscordDatabaseController("sqlite+aiosqlite:///./discord.db") as db:
 
 | 変数名 | 説明 | デフォルト値 |
 |--------|------|-------------|
-| `DATABASE_URL` | データベース接続URL | `sqlite+aiosqlite:///./discord.db` |
+| `DATABASE_URL` | Supabase/Postgres の SQLAlchemy 接続URL | なし |
 | `MOCK_MODE` | モックモードの有効化 | `false` |
 
 ## データモデル
@@ -95,5 +97,17 @@ async with DiscordDatabaseController("sqlite+aiosqlite:///./discord.db") as db:
 ## 依存関係
 
 - `sqlalchemy>=2.0.0`
-- `aiosqlite>=0.20.0`
+- `asyncpg>=0.30.0`
 - `pydantic>=2.0.0`
+
+## ローカル Supabase
+
+ローカル開発と DB 結合テストは `supabase cli` で起動した Postgres を前提にしています。
+
+```sh
+supabase start
+supabase db reset --local
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+スキーマは [supabase/migrations/20260410000000_init_discord_connector.sql](/home/nixos/myProjects/BasicInfrastructureSystem/supabase/migrations/20260410000000_init_discord_connector.sql) で管理します。

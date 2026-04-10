@@ -1,5 +1,5 @@
 import discord
-from interface import Channel, Role, DiscordError
+from DiscordConnector.DiscordController.interface import Channel, DiscordError, Role
 
 #とりあえずテキストチャンネルのみ
 

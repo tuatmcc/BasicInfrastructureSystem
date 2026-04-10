@@ -1,8 +1,14 @@
 import asyncio
-from interface import IDiscordController
-from interface import Role, Channel, Member, Category, Message, Reaction
-import bot
-import cmds
+from DiscordConnector.DiscordController import bot, cmds
+from DiscordConnector.DiscordController.interface import (
+    Category,
+    Channel,
+    IDiscordController,
+    Member,
+    Message,
+    Reaction,
+    Role,
+)
 
 #メソッドは適当。後でお話し合いをするべき
 class DiscordController(IDiscordController):

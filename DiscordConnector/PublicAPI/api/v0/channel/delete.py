@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.dependencies import get_channel_service
 from ..schemas import ChannelDelete, SuccessResponse
-from dependencies import get_channel_service
 
 router = APIRouter()
 

@@ -1,8 +1,9 @@
 """Tests for role commands in DiscordController."""
 
 import pytest
-from cmds import role
-from interface import DiscordError
+
+from DiscordConnector.DiscordController.cmds import role
+from DiscordConnector.DiscordController.interface import DiscordError
 
 
 class TestRoleCreate:

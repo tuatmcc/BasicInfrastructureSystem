@@ -1,6 +1,15 @@
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI
-from dependencies import lifespan
-from api.v0 import router as v0_router
+
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from DiscordConnector.PublicAPI.api.v0 import router as v0_router
+from DiscordConnector.PublicAPI.dependencies import lifespan
 
 app = FastAPI(
     title="Discord Connector Public API",

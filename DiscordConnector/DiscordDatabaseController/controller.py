@@ -3,7 +3,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from interface import (
+from DiscordConnector.DiscordDatabaseController.database import Database
+from DiscordConnector.DiscordDatabaseController.interface import (
     IDiscordDatabaseController,
     User,
     Role,
@@ -11,8 +12,12 @@ from interface import (
     Channel,
     DatabaseError,
 )
-from database import Database
-from models import UserModel, RoleModel, CategoryModel, ChannelModel
+from DiscordConnector.DiscordDatabaseController.models import (
+    CategoryModel,
+    ChannelModel,
+    RoleModel,
+    UserModel,
+)
 
 
 class DiscordDatabaseController(IDiscordDatabaseController):

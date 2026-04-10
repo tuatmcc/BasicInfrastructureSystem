@@ -1,5 +1,5 @@
 import discord
-from interface import Category, DiscordError
+from DiscordConnector.DiscordController.interface import Category, DiscordError
 
 async def create(name: str, position: int|None, guild: discord.Guild) -> Category:
     try:
