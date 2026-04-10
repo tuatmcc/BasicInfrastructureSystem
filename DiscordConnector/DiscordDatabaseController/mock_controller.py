@@ -1,6 +1,6 @@
 """Mock implementation of DiscordDatabaseController for testing."""
 
-from interface import (
+from DiscordConnector.DiscordDatabaseController.interface import (
     IDiscordDatabaseController,
     User,
     Role,

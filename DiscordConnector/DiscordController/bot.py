@@ -1,12 +1,7 @@
-import sys
-from pathlib import Path
 import logging
 import discord
 
-# Add parent directory to path for config import
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from config import (
+from DiscordConnector.config import (
     MOCK_MODE,
     get_discord_token,
     get_discord_guild_id,

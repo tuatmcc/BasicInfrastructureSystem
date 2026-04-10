@@ -1,19 +1,53 @@
 # BasicInfrastructureSystem
 MCC基盤システムのモノレポ
 
-## 操作用インターフェース
+## DiscordConnector の立ち上げ
 
-起ち上げ
+DiscordConnector は `PublicAPI` を起動すると、内部で `ControlInterface` と
+`DiscordController` / `DiscordDatabaseController` も初期化されます。
+
+### 依存関係のインストール
+
 ```sh
-uv sync
+uv sync --all-packages
+```
+
+### 実 Discord に接続して起動
+
+`DiscordConnector/.env` に最低限以下を設定します。
+
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_GUILD_ID`
+
+DB も使うため、Supabase ローカル環境を起動して `DATABASE_URL` を設定します。
+
+```sh
+cp DiscordConnector/.env.example DiscordConnector/.env
 supabase start
 supabase db reset --local
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
-cd DiscordConnector/ControlInterface
+cd DiscordConnector/PublicAPI
 uv run uvicorn main:app --reload
-# モックモード
-# MOCK_MODE=true uv run uvicorn main:app --reload
 ```
+
+起動後は `http://127.0.0.1:8000/health` で疎通確認できます。
+
+### モックモードで起動
+
+Discord への実接続が不要なら `MOCK_MODE=true` で起動できます。
+
+```sh
+supabase start
+supabase db reset --local
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
+cd DiscordConnector/PublicAPI
+MOCK_MODE=true uv run uvicorn main:app --reload
+```
+
+### 補足
+
+`ControlInterface` はサービス層で、単独で起動するエントリポイントはありません。
+そのため、操作用インターフェースとして別途 `ControlInterface` の起動手順を README に書く必要はありません。
 
 ## テスト実行
 

@@ -1,8 +1,9 @@
 """Tests for category commands in DiscordController."""
 
 import pytest
-from cmds import category
-from interface import DiscordError
+
+from DiscordConnector.DiscordController.cmds import category
+from DiscordConnector.DiscordController.interface import DiscordError
 
 
 class TestCategoryCreate:

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.dependencies import get_category_service
 from ..schemas import CategoryCreate, CategoryResponse
-from dependencies import get_category_service
 
 router = APIRouter()
 

@@ -1,8 +1,9 @@
 """Tests for member commands in DiscordController."""
 
 import pytest
-from cmds import member
-from interface import DiscordError
+
+from DiscordConnector.DiscordController.cmds import member
+from DiscordConnector.DiscordController.interface import DiscordError
 
 
 class TestMemberList:

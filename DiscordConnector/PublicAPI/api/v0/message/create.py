@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.dependencies import get_message_service
 from ..schemas import MessageCreate, MessageResponse
-from dependencies import get_message_service
 
 router = APIRouter()
 

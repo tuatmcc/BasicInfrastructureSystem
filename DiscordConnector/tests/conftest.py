@@ -10,58 +10,33 @@ import os
 import sys
 from pathlib import Path
 from typing import AsyncGenerator
-import importlib.util
 
 import pytest
 
 # Set MOCK_MODE before importing any project modules
 os.environ["MOCK_MODE"] = "true"
 
-# Base paths
-_base_path = Path(__file__).parent.parent
-_discord_controller_path = _base_path / "DiscordController"
-_db_controller_path = _base_path / "DiscordDatabaseController"
-_control_interface_path = _base_path / "ControlInterface"
-_public_api_path = _base_path / "PublicAPI"
+repo_root = Path(__file__).resolve().parents[2]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
-
-def load_module_from_path(module_name: str, file_path: Path):
-    """Load a module from an explicit file path."""
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-# Load interface from DiscordController first
-_interface_module = load_module_from_path(
-    "interface",
-    _discord_controller_path / "interface.py"
+from DiscordConnector.ControlInterface.services import (
+    CategoryService,
+    ChannelService,
+    MemberService,
+    MessageService,
+    RoleService,
 )
-
-# Load DiscordController's mock_controller
-_discord_mock_module = load_module_from_path(
-    "mock_controller",
-    _discord_controller_path / "mock_controller.py"
+from DiscordConnector.DiscordController.mock_controller import MockDiscordController
+from DiscordConnector.DiscordDatabaseController.controller import (
+    DiscordDatabaseController,
 )
-MockDiscordController = _discord_mock_module.MockDiscordController
-
-# Add paths for other imports.
-# PublicAPI must be first so `main` and `dependencies` resolve to that package.
-sys.path.insert(0, str(_public_api_path))
-sys.path.insert(0, str(_control_interface_path))
-sys.path.insert(0, str(_discord_controller_path))
-sys.path.insert(0, str(_db_controller_path))
-sys.path.insert(0, str(_base_path))
-
-# Pre-register PublicAPI dependencies before importing `main`.
-load_module_from_path(
-    "dependencies",
-    _public_api_path / "dependencies.py"
+from DiscordConnector.PublicAPI import dependencies
+from DiscordConnector.PublicAPI.api.v0 import router as v0_router
+from DiscordConnector.test_support.supabase import (
+    get_test_database_url,
+    reset_test_database,
 )
-
-from test_support.supabase import get_test_database_url, reset_test_database
 
 
 @pytest.fixture
@@ -75,44 +50,10 @@ async def db_controller():
     """Create a DiscordDatabaseController backed by Supabase Postgres."""
     database_url = get_test_database_url()
     await reset_test_database(database_url)
-
-    # Save current interface module
-    saved_interface = sys.modules.get('interface')
-    
-    # Load DB controller's interface
-    db_interface = load_module_from_path(
-        "db_interface",
-        _db_controller_path / "interface.py"
-    )
-    sys.modules['interface'] = db_interface
-    
-    # Load database module
-    load_module_from_path(
-        "database",
-        _db_controller_path / "database.py"
-    )
-    
-    # Load models module
-    load_module_from_path(
-        "models",
-        _db_controller_path / "models.py"
-    )
-    
-    # Load controller
-    db_ctrl_module = load_module_from_path(
-        "db_controller_module",
-        _db_controller_path / "controller.py"
-    )
-    DiscordDatabaseController = db_ctrl_module.DiscordDatabaseController
-    
     controller = DiscordDatabaseController(database_url)
     await controller.connect()
     yield controller
     await controller.disconnect()
-    
-    # Restore interface
-    if saved_interface:
-        sys.modules['interface'] = saved_interface
 
 
 @pytest.fixture
@@ -130,16 +71,6 @@ async def integrated_client(
     from contextlib import asynccontextmanager
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
-    import dependencies
-
-    from services import (
-        RoleService,
-        ChannelService,
-        CategoryService,
-        MemberService,
-        MessageService,
-    )
-    from api.v0 import router as v0_router
 
     role_service = RoleService(mock_discord_controller, db_controller)
     channel_service = ChannelService(mock_discord_controller, db_controller)

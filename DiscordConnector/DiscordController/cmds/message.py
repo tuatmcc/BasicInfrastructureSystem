@@ -1,5 +1,5 @@
 import discord
-from interface import Message, Reaction, DiscordError
+from DiscordConnector.DiscordController.interface import DiscordError, Message, Reaction
 
 #TextChannel.send自体はもっと埋め込みとかリンクとか送れるので対応したいね
 async def create(channel_id: int, content: str, guild: discord.Guild) -> Message:

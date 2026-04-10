@@ -1,5 +1,5 @@
 import discord
-from interface import Member, Role, DiscordError
+from DiscordConnector.DiscordController.interface import DiscordError, Member, Role
 
 async def list_(guild: discord.Guild) -> list[Member]:
     return [Member(m.id, m.name) for m in guild.members]

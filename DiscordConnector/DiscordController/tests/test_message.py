@@ -2,8 +2,9 @@
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from cmds import message
-from interface import DiscordError
+
+from DiscordConnector.DiscordController.cmds import message
+from DiscordConnector.DiscordController.interface import DiscordError
 
 
 def create_mock_message(

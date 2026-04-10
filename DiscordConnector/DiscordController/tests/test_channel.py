@@ -1,8 +1,9 @@
 """Tests for channel commands in DiscordController."""
 
 import pytest
-from cmds import channel
-from interface import DiscordError
+
+from DiscordConnector.DiscordController.cmds import channel
+from DiscordConnector.DiscordController.interface import DiscordError
 
 
 class TestChannelCreate:

@@ -1,5 +1,5 @@
 import discord
-from interface import Role, Member, DiscordError
+from DiscordConnector.DiscordController.interface import DiscordError, Member, Role
 
 # permissionsもほしい
 # 成功/失敗だけ返す方がいいかも？

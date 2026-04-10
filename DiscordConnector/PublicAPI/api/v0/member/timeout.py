@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.dependencies import get_member_service
 from ..schemas import MemberTimeout, SuccessResponse
-from dependencies import get_member_service
 
 router = APIRouter()
 

@@ -5,12 +5,17 @@ from pathlib import Path
 
 import pytest
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+repo_root = Path(__file__).resolve().parents[3]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
-from controller import DiscordDatabaseController
-from test_support.supabase import get_test_database_url, reset_test_database
+from DiscordConnector.DiscordDatabaseController.controller import (
+    DiscordDatabaseController,
+)
+from DiscordConnector.test_support.supabase import (
+    get_test_database_url,
+    reset_test_database,
+)
 
 
 @pytest.fixture

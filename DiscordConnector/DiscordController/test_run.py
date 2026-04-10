@@ -1,5 +1,5 @@
 import asyncio
-from controller import DiscordController
+from DiscordConnector.DiscordController.controller import DiscordController
 
 async def main():
     print("Starting DiscordController...")
