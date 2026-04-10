@@ -3,7 +3,7 @@
 This module provides fixtures that combine:
 - MockDiscordController (simulates Discord API)
 - ControlInterface API (FastAPI TestClient)
-- DiscordDatabaseController (in-memory SQLite)
+- DiscordDatabaseController (Supabase Postgres)
 """
 
 import os
@@ -51,6 +51,8 @@ sys.path.insert(0, str(_discord_controller_path))
 sys.path.insert(0, str(_control_interface_path))
 sys.path.insert(0, str(_base_path))
 
+from test_support.supabase import get_test_database_url, reset_test_database
+
 
 @pytest.fixture
 def mock_discord_controller() -> MockDiscordController:
@@ -60,7 +62,10 @@ def mock_discord_controller() -> MockDiscordController:
 
 @pytest.fixture
 async def db_controller():
-    """Create a DiscordDatabaseController with in-memory SQLite for each test."""
+    """Create a DiscordDatabaseController backed by Supabase Postgres."""
+    database_url = get_test_database_url()
+    await reset_test_database(database_url)
+
     # Save current interface module
     saved_interface = sys.modules.get('interface')
     
@@ -90,7 +95,7 @@ async def db_controller():
     )
     DiscordDatabaseController = db_ctrl_module.DiscordDatabaseController
     
-    controller = DiscordDatabaseController("sqlite+aiosqlite:///:memory:")
+    controller = DiscordDatabaseController(database_url)
     await controller.connect()
     yield controller
     await controller.disconnect()
@@ -105,11 +110,11 @@ def integrated_client(
     mock_discord_controller: MockDiscordController,
     db_controller
 ) -> Generator:
-    """Create a TestClient with both MockDiscordController and real in-memory DB.
+    """Create a TestClient with both MockDiscordController and Supabase DB.
     
     This fixture provides a fully integrated test environment where:
     - Discord operations go through MockDiscordController
-    - Database operations go through real DiscordDatabaseController (in-memory SQLite)
+    - Database operations go through real DiscordDatabaseController (Supabase Postgres)
     - API operations go through real FastAPI TestClient
     """
     from fastapi.testclient import TestClient

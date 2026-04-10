@@ -30,6 +30,8 @@ sys.path.insert(0, str(_discord_controller_path))
 sys.path.insert(0, str(_db_controller_path))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from test_support.supabase import get_test_database_url, reset_test_database
+
 # Load interface from DiscordController first
 _interface_module = load_module_from_path(
     "interface",
@@ -76,7 +78,10 @@ def mock_db_controller():
 
 @pytest.fixture
 async def db_controller():
-    """Create a DiscordDatabaseController with in-memory SQLite for each test."""
+    """Create a DiscordDatabaseController backed by Supabase Postgres."""
+    database_url = get_test_database_url()
+    await reset_test_database(database_url)
+
     saved_interface = sys.modules.get('interface')
     
     db_interface = load_module_from_path(
@@ -101,7 +106,7 @@ async def db_controller():
     )
     DiscordDatabaseController = db_ctrl_module.DiscordDatabaseController
     
-    controller = DiscordDatabaseController("sqlite+aiosqlite:///:memory:")
+    controller = DiscordDatabaseController(database_url)
     await controller.connect()
     yield controller
     await controller.disconnect()

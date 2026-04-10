@@ -5,6 +5,7 @@ Discord Connectorのビジネスロジックを提供するサービス層です
 ## 概要
 
 ControlInterfaceは、DiscordControllerとDiscordDatabaseControllerを協調させてビジネスロジックを実行するサービス層を提供します。
+実 DB 利用時は `DATABASE_URL` に Supabase(Postgres) の接続先を指定します。
 
 ## 構造
 

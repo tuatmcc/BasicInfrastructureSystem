@@ -60,13 +60,18 @@ def validate_discord_config() -> None:
 
 
 def get_database_url() -> str:
-    """Get database URL from environment.
-    
-    Defaults to SQLite database in current directory.
-    """
-    return os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./discord.db")
+    """Get the Postgres database URL from environment."""
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError("DATABASE_URL is required and must point to a Supabase Postgres instance")
+    if not database_url.startswith("postgresql+asyncpg://"):
+        raise ValueError(
+            "DATABASE_URL must use the SQLAlchemy asyncpg dialect: "
+            "'postgresql+asyncpg://...'"
+        )
+    return database_url
 
 
 # Module-level flag for convenience
 MOCK_MODE = is_mock_mode()
-DATABASE_URL = get_database_url()
+DATABASE_URL = os.getenv("DATABASE_URL")

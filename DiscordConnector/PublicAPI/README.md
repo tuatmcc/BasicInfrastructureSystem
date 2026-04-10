@@ -19,6 +19,7 @@ DiscordController / DiscordDatabaseController
 ## Running
 
 ```bash
+export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
 uvicorn main:app --reload
 ```
 

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "DiscordDatabaseController
 # Add parent for config
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import MOCK_MODE, DATABASE_URL
+from config import MOCK_MODE, get_database_url
 
 # Import Discord controller interface
 import importlib.util as _importlib_util
@@ -75,7 +75,7 @@ def _create_db_controller() -> "IDiscordDatabaseController":
         )
         db_ctrl_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(db_ctrl_module)
-        return db_ctrl_module.DiscordDatabaseController(DATABASE_URL)
+        return db_ctrl_module.DiscordDatabaseController(get_database_url())
 
 
 @asynccontextmanager

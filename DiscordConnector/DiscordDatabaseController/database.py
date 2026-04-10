@@ -5,18 +5,20 @@ from sqlalchemy.orm import sessionmaker
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from models import Base
-
 
 class Database:
     """Database connection manager."""
 
     def __init__(self, database_url: str):
         """Initialize database with connection URL.
-        
+
         Args:
-            database_url: SQLAlchemy connection URL (e.g., sqlite+aiosqlite:///./discord.db)
+            database_url: SQLAlchemy connection URL for Supabase Postgres.
         """
+        if not database_url.startswith("postgresql+asyncpg://"):
+            raise ValueError(
+                "DiscordDatabaseController requires a Postgres SQLAlchemy URL using asyncpg"
+            )
         self._database_url = database_url
         self._engine: AsyncEngine | None = None
         self._session_factory: sessionmaker | None = None
@@ -29,23 +31,20 @@ class Database:
         return self._engine
 
     async def connect(self) -> None:
-        """Initialize database connection and create tables."""
+        """Initialize the database connection."""
         if self._engine is not None:
             return
 
         self._engine = create_async_engine(
             self._database_url,
             echo=False,
+            pool_pre_ping=True,
         )
         self._session_factory = sessionmaker(
             bind=self._engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
-
-        # Create tables
-        async with self._engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
 
     async def disconnect(self) -> None:
         """Close database connection and cleanup."""
@@ -59,7 +58,7 @@ class Database:
         """Get a database session."""
         if self._session_factory is None:
             raise RuntimeError("Database not initialized. Call connect() first.")
-        
+
         async with self._session_factory() as session:
             try:
                 yield session
