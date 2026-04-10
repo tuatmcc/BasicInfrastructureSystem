@@ -14,7 +14,7 @@ class TestRoleLifecycle:
         ctx = integration_context
 
         # Create role via API
-        response = ctx.api.post(
+        response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "IntegrationTestRole", "color": [100, 150, 200], "position": 3},
         )
@@ -32,7 +32,7 @@ class TestRoleLifecycle:
         ctx = integration_context
 
         # Create role first
-        create_response = ctx.api.post(
+        create_response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "RoleToDelete"},
         )
@@ -44,7 +44,7 @@ class TestRoleLifecycle:
         assert db_role is not None
 
         # Delete role via API
-        delete_response = ctx.api.post(
+        delete_response = await ctx.api.post(
             "/api/v0/role/delete",
             json={"id": role_id},
         )
@@ -62,7 +62,7 @@ class TestRoleLifecycle:
         role_names = ["Role1", "Role2", "Role3"]
         created_ids = []
         for name in role_names:
-            response = ctx.api.post(
+            response = await ctx.api.post(
                 "/api/v0/role/create",
                 json={"name": name},
             )
@@ -86,7 +86,7 @@ class TestChannelLifecycle:
         ctx = integration_context
 
         # Create category first
-        cat_response = ctx.api.post(
+        cat_response = await ctx.api.post(
             "/api/v0/category/create",
             json={"name": "TestCategory", "position": 1},
         )
@@ -99,7 +99,7 @@ class TestChannelLifecycle:
         assert db_category.category_name == "TestCategory"
 
         # Create channel in category
-        ch_response = ctx.api.post(
+        ch_response = await ctx.api.post(
             "/api/v0/channel/create",
             json={"name": "test-channel", "category_id": category_id},
         )
@@ -117,7 +117,7 @@ class TestChannelLifecycle:
         ctx = integration_context
 
         # Create category
-        cat_response = ctx.api.post(
+        cat_response = await ctx.api.post(
             "/api/v0/category/create",
             json={"name": "CascadeTestCategory"},
         )
@@ -127,7 +127,7 @@ class TestChannelLifecycle:
         # Create channels in category
         channel_ids = []
         for i in range(3):
-            ch_response = ctx.api.post(
+            ch_response = await ctx.api.post(
                 "/api/v0/channel/create",
                 json={"name": f"cascade-channel-{i}", "category_id": category_id},
             )
@@ -140,7 +140,7 @@ class TestChannelLifecycle:
             assert db_channel is not None
 
         # Delete category
-        delete_response = ctx.api.post(
+        delete_response = await ctx.api.post(
             "/api/v0/category/delete",
             json={"id": category_id},
         )
@@ -163,7 +163,7 @@ class TestMemberManagement:
         """Listing members should return members from Discord (mock)."""
         ctx = integration_context
 
-        response = ctx.api.get("/api/v0/member/list")
+        response = await ctx.api.get("/api/v0/member/list")
         assert response.status_code == 200
         members = response.json()
         assert isinstance(members, list)
@@ -176,7 +176,7 @@ class TestMemberManagement:
         # Create roles
         role_ids = []
         for name in ["MemberRole1", "MemberRole2"]:
-            response = ctx.api.post(
+            response = await ctx.api.post(
                 "/api/v0/role/create",
                 json={"name": name},
             )
@@ -184,7 +184,7 @@ class TestMemberManagement:
             role_ids.append(str(response.json()["id"]))
 
         # Get a member from the list
-        members_response = ctx.api.get("/api/v0/member/list")
+        members_response = await ctx.api.get("/api/v0/member/list")
         assert members_response.status_code == 200
         members = members_response.json()
         assert len(members) > 0
@@ -214,21 +214,21 @@ class TestComplexScenarios:
         ctx = integration_context
 
         # Step 1: Create roles
-        admin_response = ctx.api.post(
+        admin_response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "Admin", "color": [255, 0, 0], "position": 10},
         )
         assert admin_response.status_code == 200
         admin_role_id = str(admin_response.json()["id"])
 
-        mod_response = ctx.api.post(
+        mod_response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "Moderator", "color": [0, 255, 0], "position": 5},
         )
         assert mod_response.status_code == 200
         mod_role_id = str(mod_response.json()["id"])
 
-        member_response = ctx.api.post(
+        member_response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "Member", "color": [0, 0, 255], "position": 1},
         )
@@ -236,14 +236,14 @@ class TestComplexScenarios:
         member_role_id = str(member_response.json()["id"])
 
         # Step 2: Create categories
-        text_cat_response = ctx.api.post(
+        text_cat_response = await ctx.api.post(
             "/api/v0/category/create",
             json={"name": "Text Channels", "position": 1},
         )
         assert text_cat_response.status_code == 200
         text_category_id = text_cat_response.json()["id"]
 
-        admin_cat_response = ctx.api.post(
+        admin_cat_response = await ctx.api.post(
             "/api/v0/category/create",
             json={"name": "Admin Only", "position": 2},
         )
@@ -251,14 +251,14 @@ class TestComplexScenarios:
         admin_category_id = admin_cat_response.json()["id"]
 
         # Step 3: Create channels
-        general_response = ctx.api.post(
+        general_response = await ctx.api.post(
             "/api/v0/channel/create",
             json={"name": "general", "category_id": text_category_id},
         )
         assert general_response.status_code == 200
         general_channel_id = str(general_response.json()["id"])
 
-        admin_ch_response = ctx.api.post(
+        admin_ch_response = await ctx.api.post(
             "/api/v0/channel/create",
             json={"name": "admin-chat", "category_id": admin_category_id},
         )
@@ -299,7 +299,7 @@ class TestComplexScenarios:
         ctx = integration_context
 
         # Create role
-        role_response = ctx.api.post(
+        role_response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "TempRole"},
         )
@@ -307,14 +307,14 @@ class TestComplexScenarios:
         role_id = str(role_response.json()["id"])
 
         # Create category and channel
-        cat_response = ctx.api.post(
+        cat_response = await ctx.api.post(
             "/api/v0/category/create",
             json={"name": "TestCat"},
         )
         assert cat_response.status_code == 200
         category_id = cat_response.json()["id"]
 
-        ch_response = ctx.api.post(
+        ch_response = await ctx.api.post(
             "/api/v0/channel/create",
             json={"name": "test-ch", "category_id": category_id},
         )
@@ -329,7 +329,7 @@ class TestComplexScenarios:
         assert role_id in channel.role_ids
 
         # Delete role
-        delete_response = ctx.api.post(
+        delete_response = await ctx.api.post(
             "/api/v0/role/delete",
             json={"id": int(role_id)},
         )
@@ -348,7 +348,7 @@ class TestDataConsistency:
         ctx = integration_context
 
         # Create role
-        response = ctx.api.post(
+        response = await ctx.api.post(
             "/api/v0/role/create",
             json={"name": "ConsistencyRole", "color": [128, 128, 128], "position": 5},
         )
@@ -371,7 +371,7 @@ class TestDataConsistency:
 
         # Create 5 roles
         for i in range(5):
-            response = ctx.api.post(
+            response = await ctx.api.post(
                 "/api/v0/role/create",
                 json={"name": f"BatchRole{i}"},
             )
@@ -384,7 +384,7 @@ class TestDataConsistency:
 
         # Delete 2 roles
         for role in created_roles[:2]:
-            delete_response = ctx.api.post(
+            delete_response = await ctx.api.post(
                 "/api/v0/role/delete",
                 json={"id": role["id"]},
             )
