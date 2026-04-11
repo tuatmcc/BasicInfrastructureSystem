@@ -1,6 +1,10 @@
 """Tests for Member API endpoints via PublicAPI."""
 
 import pytest
+from unittest.mock import AsyncMock
+
+from DiscordConnector.DiscordController.interface import DiscordConnectionError
+from DiscordConnector.PublicAPI import dependencies as public_deps
 
 pytestmark = pytest.mark.asyncio
 
@@ -17,6 +21,16 @@ class TestMemberList:
         member = data[0]
         assert "id" in member
         assert "name" in member
+
+    async def test_list_members_returns_503_on_discord_connection_failure(self, client):
+        public_deps._member_service.list_members = AsyncMock(
+            side_effect=DiscordConnectionError("Failed to connect to Discord")
+        )
+
+        response = await client.get("/api/v0/member/list")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Failed to connect to Discord"}
 
 
 class TestMemberBan:

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from DiscordConnector.DiscordController.controller import DiscordController
+from DiscordConnector.DiscordController.interface import DiscordConnectionError
 
 
 def _make_ready_client() -> MagicMock:
@@ -121,4 +122,26 @@ async def test_context_manager_keeps_connection_for_multiple_operations(monkeypa
         await controller.list_channels()
 
     client.start.assert_awaited_once_with("token")
+    client.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_connect_wraps_client_start_failure(monkeypatch):
+    controller = DiscordController()
+    client = _make_ready_client()
+    client.start = AsyncMock(side_effect=RuntimeError("tls failed"))
+    client.close = AsyncMock()
+
+    monkeypatch.setattr(
+        "DiscordConnector.DiscordController.bot.get_connection_settings",
+        lambda: ("token", 12345),
+    )
+    monkeypatch.setattr(
+        "DiscordConnector.DiscordController.bot.create_client",
+        lambda: client,
+    )
+
+    with pytest.raises(DiscordConnectionError, match="Failed to connect to Discord"):
+        await controller.connect()
+
     client.close.assert_awaited_once()

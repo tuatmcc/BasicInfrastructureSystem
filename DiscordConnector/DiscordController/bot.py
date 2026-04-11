@@ -1,7 +1,10 @@
 import logging
+import ssl
 from collections.abc import Awaitable, Callable
 from functools import wraps
 
+import aiohttp
+import certifi
 import discord
 
 from DiscordConnector.config import (
@@ -16,7 +19,9 @@ logger = logging.getLogger(__name__)
 def create_client() -> discord.Client:
     """Create a fresh discord.py client for one connection session."""
     intents = discord.Intents.all()
-    return discord.Client(intents=intents)
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(limit=0, ssl=ssl_context)
+    return discord.Client(intents=intents, connector=connector)
 
 
 def get_connection_settings() -> tuple[str, int]:

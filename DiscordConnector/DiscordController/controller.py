@@ -3,10 +3,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import discord
+
 from DiscordConnector.DiscordController import bot, cmds
 from DiscordConnector.DiscordController.interface import (
     Category,
     Channel,
+    DiscordConnectionError,
     IDiscordController,
     Member,
     Message,
@@ -68,9 +71,9 @@ class DiscordController(IDiscordController):
             raise TimeoutError(
                 f"Discord client did not become ready within {CONNECT_TIMEOUT_SECONDS} seconds"
             )
-        except Exception:
+        except Exception as exc:
             await self._abort_connection()
-            raise
+            raise self._wrap_connection_error(exc) from exc
         finally:
             ready_wait_task.cancel()
             try:
@@ -110,7 +113,7 @@ class DiscordController(IDiscordController):
         await self._ready_event.wait()
         self.guild = self.client.get_guild(self._guild_id)
         if self.guild is None:
-            raise ValueError(f"Failed to access to guild")
+            raise DiscordConnectionError("Connected to Discord but failed to access the configured guild")
         logger.info("Connected to guild %s", self.guild.id)
 
     async def _abort_connection(self) -> None:
@@ -121,8 +124,8 @@ class DiscordController(IDiscordController):
             if self._runner_task is not None:
                 try:
                     await self._runner_task
-                except Exception:
-                    logger.exception("Discord runner task failed during cleanup")
+                except Exception as exc:
+                    logger.debug("Suppressing Discord runner exception during cleanup: %s", exc)
         finally:
             self._reset_connection_state()
 
@@ -132,6 +135,17 @@ class DiscordController(IDiscordController):
         self._ready_event = None
         self._runner_task = None
         self._guild_id = None
+
+    def _wrap_connection_error(self, exc: Exception) -> DiscordConnectionError:
+        if isinstance(exc, DiscordConnectionError):
+            return exc
+        if isinstance(exc, discord.LoginFailure):
+            return DiscordConnectionError("Discord login failed. Check the bot token.")
+        if isinstance(exc, TimeoutError):
+            return DiscordConnectionError(
+                f"Discord client did not become ready within {CONNECT_TIMEOUT_SECONDS} seconds"
+            )
+        return DiscordConnectionError("Failed to connect to Discord")
 
     async def _execute_with_connection(
         self,

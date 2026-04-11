@@ -27,6 +27,7 @@ from DiscordConnector.DiscordDatabaseController.mock_controller import (
 )
 from DiscordConnector.PublicAPI import dependencies as public_deps
 from DiscordConnector.PublicAPI.api.v0 import router as v0_router
+from DiscordConnector.PublicAPI.error_handlers import register_exception_handlers
 
 
 @pytest.fixture
@@ -74,6 +75,7 @@ async def client(
         title="Discord Connector Public API (Test)",
         lifespan=test_lifespan,
     )
+    register_exception_handlers(app)
     app.include_router(v0_router, prefix="/api/v0")
 
     async def get_role_service_override():

@@ -3,6 +3,11 @@
 import logging
 from dataclasses import dataclass
 
+from DiscordConnector.DiscordController.interface import IDiscordController
+from DiscordConnector.DiscordDatabaseController.interface import (
+    IDiscordDatabaseController,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +31,11 @@ class MemberData:
 class RoleService:
     """Service for role operations."""
 
-    def __init__(self, controller, db_controller):
+    def __init__(
+        self,
+        controller: IDiscordController,
+        db_controller: IDiscordDatabaseController,
+    ):
         self._ctrl = controller
         self._db_ctrl = db_controller
 
