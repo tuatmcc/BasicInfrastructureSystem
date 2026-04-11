@@ -5,6 +5,8 @@ MCC基盤システムのモノレポ
 
 DiscordConnector は `PublicAPI` を起動すると、内部で `ControlInterface` と
 `DiscordController` / `DiscordDatabaseController` も初期化されます。
+このうち Discord への実接続は startup 時には行わず、`role/create` など
+Discord 操作を実行するたびに接続して切断します。
 
 ### 依存関係のインストール
 
@@ -12,7 +14,7 @@ DiscordConnector は `PublicAPI` を起動すると、内部で `ControlInterfac
 uv sync --all-packages
 ```
 
-### 実 Discord に接続して起動
+### 実 Discord を使って起動
 
 `DiscordConnector/.env` に最低限以下を設定します。
 
@@ -31,6 +33,7 @@ uv run uvicorn main:app --reload
 ```
 
 起動後は `http://127.0.0.1:8000/health` で疎通確認できます。
+この時点では Discord Gateway には未接続で、各 API 操作時に接続されます。
 
 ### モックモードで起動
 

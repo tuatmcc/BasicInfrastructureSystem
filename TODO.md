@@ -21,6 +21,12 @@
 - `client.start(...)` 側の例外が startup に表面化しにくく、ログなしで固まったように見える構造になっている。
 - startup 完了前に停止すると cleanup に到達しないため、Discord task が残って `Ctrl+C` が効きにくく見える。
 
+## 2026-04-11 対応
+
+- FastAPI startup 時の Discord 接続を廃止し、controller 生成だけを行う構成へ変更する。
+- Discord 接続は `role/create` などの Discord 操作ごとに `connect -> set_guild -> command -> disconnect` で実行する。
+- `/health` は Discord Gateway の状態に依存せず startup 直後から応答できるようにする。
+
 ## Relevant Files
 
 - `DiscordConnector/PublicAPI/dependencies.py`

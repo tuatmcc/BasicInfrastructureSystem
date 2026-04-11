@@ -1,8 +1,10 @@
 import logging
+from collections.abc import Awaitable, Callable
+from functools import wraps
+
 import discord
 
 from DiscordConnector.config import (
-    MOCK_MODE,
     get_discord_token,
     get_discord_guild_id,
     validate_discord_config,
@@ -10,20 +12,36 @@ from DiscordConnector.config import (
 
 logger = logging.getLogger(__name__)
 
-# Validate configuration unless in mock mode
-if not MOCK_MODE:
+
+def create_client() -> discord.Client:
+    """Create a fresh discord.py client for one connection session."""
+    intents = discord.Intents.all()
+    return discord.Client(intents=intents)
+
+
+def get_connection_settings() -> tuple[str, int]:
+    """Load and validate Discord connection settings on demand."""
     validate_discord_config()
 
-token = get_discord_token()
-guild_id = get_discord_guild_id()
+    token = get_discord_token()
+    guild_id = get_discord_guild_id()
+    if token is None or guild_id is None:
+        raise ValueError("Discord connection settings are incomplete")
+    return token, guild_id
 
-intents = discord.Intents.all()
-client = discord.Client(intents=intents)
 
-def logged_command(command):
+def logged_command(command: Callable[..., Awaitable[object]]):
+    @wraps(command)
     async def wrapper(*args, **kwargs):
-        logger.info(f"Executing command {command.__name__}...")
-        result = await command(*args, **kwargs)
-        logger.info("Command {command.__name__} done.")
+        logger.info("Executing command %s...", command.__name__)
+
+        controller = args[0] if args else None
+        if controller is not None and hasattr(controller, "_execute_with_connection"):
+            result = await controller._execute_with_connection(command, *args, **kwargs)
+        else:
+            result = await command(*args, **kwargs)
+
+        logger.info("Command %s done.", command.__name__)
         return result
+
     return wrapper

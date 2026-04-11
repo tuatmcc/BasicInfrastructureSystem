@@ -24,7 +24,7 @@ def _create_controller() -> IDiscordController:
 
         return MockDiscordController()
 
-    logger.info("Starting with real Discord connection")
+    logger.info("Starting with real Discord controller (Discord connection is deferred)")
     from DiscordConnector.DiscordController.controller import DiscordController
 
     return DiscordController()
@@ -59,8 +59,6 @@ async def lifespan(app) -> AsyncGenerator[None, None]:
     
     if _controller is None:
         _controller = _create_controller()
-        await _controller.connect()
-        await _controller.set_guild()
         should_cleanup_controller = True
     
     if _db_controller is None:
