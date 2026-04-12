@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models for DiscordDatabaseController."""
 
-from sqlalchemy import Column, String, BigInteger, ForeignKey, Table
+from sqlalchemy import Column, String, ForeignKey, Table
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -8,8 +9,8 @@ Base = declarative_base()
 
 # Intermediate tables for many-to-many relationships
 
-user_roles = Table(
-    "user_roles",
+user_role = Table(
+    "user_role",
     Base.metadata,
     Column(
         "discord_user_id",
@@ -25,8 +26,8 @@ user_roles = Table(
     ),
 )
 
-category_role_access = Table(
-    "category_role_access",
+category_role = Table(
+    "category_role",
     Base.metadata,
     Column(
         "category_id",
@@ -42,8 +43,8 @@ category_role_access = Table(
     ),
 )
 
-channel_role_access = Table(
-    "channel_role_access",
+channel_role = Table(
+    "channel_role",
     Base.metadata,
     Column(
         "channel_id",
@@ -66,9 +67,13 @@ class UserModel(Base):
 
     discord_user_id = Column(String, primary_key=True, index=True)
     display_name = Column(String, nullable=False)
-    member_id = Column(String, nullable=True)
+    member_id = Column(
+        UUID(as_uuid=False),
+        ForeignKey("members.member_id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
-    roles = relationship("RoleModel", secondary=user_roles, back_populates="users", passive_deletes=True)
+    roles = relationship("RoleModel", secondary=user_role, back_populates="users", passive_deletes=True)
 
 
 class RoleModel(Base):
@@ -77,18 +82,16 @@ class RoleModel(Base):
 
     role_id = Column(String, primary_key=True, index=True)
     role_name = Column(String, nullable=False)
-    permissions = Column(BigInteger, nullable=False, default=0)
-
-    users = relationship("UserModel", secondary=user_roles, back_populates="roles", passive_deletes=True)
+    users = relationship("UserModel", secondary=user_role, back_populates="roles", passive_deletes=True)
     categories = relationship(
         "CategoryModel",
-        secondary=category_role_access,
+        secondary=category_role,
         back_populates="roles",
         passive_deletes=True,
     )
     channels = relationship(
         "ChannelModel",
-        secondary=channel_role_access,
+        secondary=channel_role,
         back_populates="roles",
         passive_deletes=True,
     )
@@ -109,7 +112,7 @@ class CategoryModel(Base):
     )
     roles = relationship(
         "RoleModel",
-        secondary=category_role_access,
+        secondary=category_role,
         back_populates="categories",
         passive_deletes=True,
     )
@@ -130,7 +133,7 @@ class ChannelModel(Base):
     category = relationship("CategoryModel", back_populates="channels")
     roles = relationship(
         "RoleModel",
-        secondary=channel_role_access,
+        secondary=channel_role,
         back_populates="channels",
         passive_deletes=True,
     )
