@@ -4,7 +4,7 @@ create table if not exists public.members (
     member_id text primary key,
     name text not null,
     year integer not null,
-    emergency_contact text,
+    emergency_contact text not null,
     student_id text not null,
     student_email text not null,
     insurance boolean not null default false,
