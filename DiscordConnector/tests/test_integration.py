@@ -331,7 +331,7 @@ class TestComplexScenarios:
         # Delete role
         delete_response = await ctx.api.post(
             "/api/v0/role/delete",
-            json={"id": int(role_id)},
+            json={"id": role_id},
         )
         assert delete_response.status_code == 200
 

@@ -10,5 +10,5 @@ async def delete_category(
     data: CategoryDelete,
     service=Depends(get_category_service),
 ):
-    success = await service.delete_category(data.id)
+    success = await service.delete_category(int(data.id))
     return SuccessResponse(success=success)

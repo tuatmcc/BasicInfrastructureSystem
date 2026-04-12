@@ -15,9 +15,9 @@ class TestCategoryCreate:
         )
         assert response.status_code == 200
         data = response.json()
+        assert isinstance(data["id"], str)
         assert data["name"] == "Test Category"
         assert data["position"] == 2
-        assert "id" in data
 
     async def test_create_category_with_name_only(self, client):
         response = await client.post(
@@ -26,8 +26,8 @@ class TestCategoryCreate:
         )
         assert response.status_code == 200
         data = response.json()
+        assert isinstance(data["id"], str)
         assert data["name"] == "Minimal Category"
-        assert "id" in data
 
     async def test_create_category_missing_name(self, client):
         response = await client.post(
@@ -43,7 +43,7 @@ class TestCategoryDelete:
     async def test_delete_category(self, client):
         response = await client.post(
             "/api/v0/category/delete",
-            json={"id": 12345},
+            json={"id": "12345"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -61,5 +61,6 @@ class TestCategoryList:
         assert len(data) > 0
         category = data[0]
         assert "id" in category
+        assert isinstance(category["id"], str)
         assert "name" in category
         assert "position" in category

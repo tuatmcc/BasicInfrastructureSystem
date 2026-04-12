@@ -34,6 +34,17 @@ def get_discord_guild_id() -> int | None:
         return None
 
 
+def get_discord_log_channel_id() -> int | None:
+    """Get Discord log channel ID from environment."""
+    value = os.getenv("DISCORD_LOG_CHANNEL_ID")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 def validate_discord_config() -> None:
     """Validate required Discord configuration.
     

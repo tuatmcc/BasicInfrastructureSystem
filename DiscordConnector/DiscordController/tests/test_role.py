@@ -1,6 +1,7 @@
 """Tests for role commands in DiscordController."""
 
 import pytest
+from unittest.mock import AsyncMock
 
 from DiscordConnector.DiscordController.cmds import role
 from DiscordConnector.DiscordController.interface import DiscordError
@@ -54,6 +55,22 @@ class TestRoleDelete:
     async def test_delete_nonexistent_role(self, mock_guild):
         with pytest.raises(DiscordError, match="No such role found"):
             await role.delete(9999, mock_guild)
+
+    async def test_delete_role_falls_back_to_guild_roles_when_get_role_misses(self, mock_guild_with_data):
+        target_role = mock_guild_with_data._roles[100]
+        target_role.delete = AsyncMock()
+        mock_guild_with_data.get_role = lambda _role_id: None
+
+        result = await role.delete(100, mock_guild_with_data)
+
+        assert result is True
+        target_role.delete.assert_awaited_once()
+
+    async def test_delete_role_logs_missing_role(self, mock_guild, caplog):
+        with pytest.raises(DiscordError, match="No such role found"):
+            await role.delete(9999, mock_guild)
+
+        assert "Role delete failed because role was not found: role_id=9999" in caplog.text
 
 
 class TestRoleList:

@@ -10,5 +10,5 @@ async def delete_role(
     data: RoleDelete,
     service=Depends(get_role_service),
 ):
-    success = await service.delete_role(data.id)
+    success = await service.delete_role(int(data.id))
     return SuccessResponse(success=success)

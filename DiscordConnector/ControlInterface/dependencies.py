@@ -2,7 +2,11 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import logging
 
-from DiscordConnector.config import MOCK_MODE, get_database_url
+from DiscordConnector.config import (
+    MOCK_MODE,
+    get_database_url,
+    get_discord_log_channel_id,
+)
 from DiscordConnector.DiscordController.interface import IDiscordController
 from DiscordConnector.DiscordDatabaseController.interface import (
     IDiscordDatabaseController,
@@ -24,7 +28,7 @@ def _create_controller() -> IDiscordController:
 
         return MockDiscordController()
 
-    logger.info("Starting with real Discord connection")
+    logger.info("Starting with real Discord controller (Discord connection is deferred)")
     from DiscordConnector.DiscordController.controller import DiscordController
 
     return DiscordController()
@@ -44,8 +48,24 @@ def _create_db_controller() -> "IDiscordDatabaseController":
     from DiscordConnector.DiscordDatabaseController.controller import (
         DiscordDatabaseController,
     )
+    from DiscordConnector.DiscordDatabaseController.logging_controller import (
+        DiscordLoggingDatabaseController,
+    )
 
-    return DiscordDatabaseController(get_database_url())
+    controller = DiscordDatabaseController(get_database_url())
+    log_channel_id = get_discord_log_channel_id()
+    if log_channel_id is None:
+        logger.warning(
+            "DISCORD_LOG_CHANNEL_ID is not set or invalid; DB change logs to Discord are disabled"
+        )
+        return controller
+
+    discord_controller = get_controller()
+    return DiscordLoggingDatabaseController(
+        controller=controller,
+        discord_controller=discord_controller,
+        log_channel_id=log_channel_id,
+    )
 
 
 @asynccontextmanager
@@ -59,8 +79,6 @@ async def lifespan(app) -> AsyncGenerator[None, None]:
     
     if _controller is None:
         _controller = _create_controller()
-        await _controller.connect()
-        await _controller.set_guild()
         should_cleanup_controller = True
     
     if _db_controller is None:

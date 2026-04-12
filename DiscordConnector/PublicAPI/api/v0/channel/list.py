@@ -10,9 +10,9 @@ async def list_channels(service=Depends(get_channel_service)):
     channels = await service.list_channels()
     return [
         ChannelResponse(
-            id=c.id,
+            id=str(c.id),
             name=c.name,
-            category_id=c.category_id,
+            category_id=str(c.category_id) if c.category_id is not None else None,
             position=c.position,
         )
         for c in channels

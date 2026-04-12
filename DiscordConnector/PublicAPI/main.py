@@ -10,6 +10,7 @@ if __package__ in {None, ""}:
 
 from DiscordConnector.PublicAPI.api.v0 import router as v0_router
 from DiscordConnector.PublicAPI.dependencies import lifespan
+from DiscordConnector.PublicAPI.error_handlers import register_exception_handlers
 
 app = FastAPI(
     title="Discord Connector Public API",
@@ -18,6 +19,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+register_exception_handlers(app)
 app.include_router(v0_router, prefix="/api/v0")
 
 
