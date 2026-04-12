@@ -34,6 +34,8 @@ uv run uvicorn main:app --reload
 
 起動後は `http://127.0.0.1:8000/health` で疎通確認できます。
 この時点では Discord Gateway には未接続で、各 API 操作時に接続されます。
+Discord Developer Portal では `Server Members Intent` を有効化してください。
+この実装では `Message Content Intent` と `Presence Intent` は不要です。
 
 ### モックモードで起動
 

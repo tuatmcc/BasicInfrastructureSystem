@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 def create_client() -> discord.Client:
     """Create a fresh discord.py client for one connection session."""
-    intents = discord.Intents.all()
+    intents = discord.Intents.none()
+    intents.guilds = True
+    # Member-related API endpoints rely on guild member caches.
+    intents.members = True
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     connector = aiohttp.TCPConnector(limit=0, ssl=ssl_context)
     return discord.Client(intents=intents, connector=connector)

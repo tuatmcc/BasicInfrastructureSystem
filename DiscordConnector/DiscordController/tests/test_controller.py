@@ -3,8 +3,10 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import discord
 import pytest
 
+from DiscordConnector.DiscordController import bot
 from DiscordConnector.DiscordController.controller import DiscordController
 from DiscordConnector.DiscordController.interface import DiscordConnectionError
 
@@ -145,3 +147,29 @@ async def test_connect_wraps_client_start_failure(monkeypatch):
         await controller.connect()
 
     client.close.assert_awaited_once()
+
+
+def test_create_client_uses_minimal_intents(monkeypatch):
+    captured: dict[str, object] = {}
+    fake_connector = object()
+
+    def fake_client(*, intents, connector):
+        captured["intents"] = intents
+        captured["connector"] = connector
+        return MagicMock()
+
+    monkeypatch.setattr(
+        "DiscordConnector.DiscordController.bot.aiohttp.TCPConnector",
+        lambda **kwargs: fake_connector,
+    )
+    monkeypatch.setattr("DiscordConnector.DiscordController.bot.discord.Client", fake_client)
+
+    bot.create_client()
+
+    intents = captured["intents"]
+    assert isinstance(intents, discord.Intents)
+    assert intents.guilds is True
+    assert intents.members is True
+    assert intents.message_content is False
+    assert intents.presences is False
+    assert captured["connector"] is fake_connector
