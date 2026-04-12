@@ -1,6 +1,10 @@
 """Tests for Role API endpoints via PublicAPI."""
 
 import pytest
+from unittest.mock import AsyncMock
+
+from DiscordConnector.DiscordController.interface import DiscordError
+from DiscordConnector.PublicAPI import dependencies as public_deps
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,6 +42,21 @@ class TestRoleCreate:
             json={},
         )
         assert response.status_code == 422
+
+    async def test_create_role_returns_403_on_permission_error(self, client):
+        public_deps._role_service.create_role = AsyncMock(
+            side_effect=DiscordError("No permission to create role empty chairs")
+        )
+
+        response = await client.post(
+            "/api/v0/role/create",
+            json={"name": "empty chairs"},
+        )
+
+        assert response.status_code == 403
+        assert response.json() == {
+            "detail": "No permission to create role empty chairs"
+        }
 
 
 class TestRoleDelete:
