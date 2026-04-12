@@ -10,5 +10,5 @@ async def delete_message(
     data: MessageDelete,
     service=Depends(get_message_service),
 ):
-    success = await service.delete_message(data.channel_id, data.message_id)
+    success = await service.delete_message(int(data.channel_id), int(data.message_id))
     return SuccessResponse(success=success)

@@ -10,10 +10,13 @@ async def create_channel(
     data: ChannelCreate,
     service=Depends(get_channel_service),
 ):
-    channel = await service.create_channel(data.name, data.category_id, data.position)
+    category_id = int(data.category_id) if data.category_id is not None else None
+    channel = await service.create_channel(data.name, category_id, data.position)
     return ChannelResponse(
-        id=channel.id,
+        id=str(channel.id),
         name=channel.name,
-        category_id=channel.category_id,
+        category_id=(
+            str(channel.category_id) if channel.category_id is not None else None
+        ),
         position=channel.position,
     )

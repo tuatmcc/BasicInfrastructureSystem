@@ -10,5 +10,5 @@ async def timeout_member(
     data: MemberTimeout,
     service=Depends(get_member_service),
 ):
-    success = await service.timeout_member(data.id)
+    success = await service.timeout_member(int(data.id))
     return SuccessResponse(success=success)

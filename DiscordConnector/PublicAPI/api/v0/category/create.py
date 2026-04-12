@@ -11,4 +11,8 @@ async def create_category(
     service=Depends(get_category_service),
 ):
     category = await service.create_category(data.name, data.position)
-    return CategoryResponse(id=category.id, name=category.name, position=category.position)
+    return CategoryResponse(
+        id=str(category.id),
+        name=category.name,
+        position=category.position,
+    )

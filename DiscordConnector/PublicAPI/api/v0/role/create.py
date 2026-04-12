@@ -11,4 +11,9 @@ async def create_role(
     service=Depends(get_role_service),
 ):
     role = await service.create_role(data.name, data.color, data.position)
-    return RoleResponse(id=role.id, name=role.name, color=role.color, position=role.position)
+    return RoleResponse(
+        id=str(role.id),
+        name=role.name,
+        color=role.color,
+        position=role.position,
+    )
