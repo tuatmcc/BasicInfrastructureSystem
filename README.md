@@ -20,6 +20,7 @@ uv sync --all-packages
 
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_GUILD_ID`
+- `DISCORD_LOG_CHANNEL_ID` (DB 更新ログの送信先。未設定時は通知無効で warning を出します)
 
 DB も使うため、Supabase ローカル環境を起動して `DATABASE_URL` を設定します。
 
