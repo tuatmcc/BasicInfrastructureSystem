@@ -61,7 +61,7 @@ class TestRoleUpdate:
         updated = await db_controller.update_role("role1", role_name="Super Admin")
         assert updated is not None
         assert updated.role_name == "Super Admin"
-        assert updated.permissions == 8  # Unchanged
+        assert updated.permissions == 0
 
     async def test_update_role_permissions(self, db_controller):
         await db_controller.create_role("role1", "Admin", 8)

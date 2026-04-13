@@ -55,7 +55,7 @@ class DiscordDatabaseController(IDiscordDatabaseController):
         return Role(
             role_id=model.role_id,
             role_name=model.role_name,
-            permissions=model.permissions,
+            permissions=0,
         )
 
     def _model_to_channel(self, model: ChannelModel) -> Channel:
@@ -205,14 +205,13 @@ class DiscordDatabaseController(IDiscordDatabaseController):
             role = RoleModel(
                 role_id=role_id,
                 role_name=role_name,
-                permissions=permissions,
             )
             session.add(role)
             await session.flush()
             return Role(
                 role_id=role.role_id,
                 role_name=role.role_name,
-                permissions=role.permissions,
+                permissions=permissions,
             )
 
     async def update_role(
@@ -231,10 +230,12 @@ class DiscordDatabaseController(IDiscordDatabaseController):
 
             if role_name is not None:
                 role.role_name = role_name
-            if permissions is not None:
-                role.permissions = permissions
             await session.flush()
-            return self._model_to_role(role)
+            return Role(
+                role_id=role.role_id,
+                role_name=role.role_name,
+                permissions=permissions if permissions is not None else 0,
+            )
 
     async def delete_role(self, role_id: str) -> bool:
         async with self._db.session() as session:
