@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import logging
 
+from DiscordConnector.config import validate_public_api_auth_config
 from DiscordConnector.ControlInterface.dependencies import (
     get_controller,
     get_db_controller,
@@ -30,6 +31,8 @@ _message_service: MessageService | None = None
 async def lifespan(app) -> AsyncGenerator[None, None]:
     """Manage service lifecycle with FastAPI app."""
     global _role_service, _channel_service, _category_service, _member_service, _message_service
+
+    validate_public_api_auth_config()
 
     # Use ControlInterface's lifespan to initialize controllers
     async with control_interface_lifespan(app):

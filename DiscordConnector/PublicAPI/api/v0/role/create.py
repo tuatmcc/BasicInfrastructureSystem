@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.auth import require_admin
 from DiscordConnector.PublicAPI.dependencies import get_role_service
 from ..schemas import RoleCreate, RoleResponse
 
@@ -8,6 +9,7 @@ router = APIRouter()
 @router.post("/create", response_model=RoleResponse)
 async def create_role(
     data: RoleCreate,
+    _principal=Depends(require_admin),
     service=Depends(get_role_service),
 ):
     role = await service.create_role(data.name, data.color, data.position)

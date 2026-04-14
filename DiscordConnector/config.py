@@ -83,6 +83,48 @@ def get_database_url() -> str:
     return database_url
 
 
+def get_jwt_secret_key() -> str:
+    """Get the JWT shared secret used by PublicAPI."""
+    secret = os.getenv("JWT_SECRET_KEY")
+    if not secret:
+        raise ValueError("JWT_SECRET_KEY is required for PublicAPI authentication")
+    return secret
+
+
+def get_jwt_algorithm() -> str:
+    """Get the JWT signing algorithm used by PublicAPI."""
+    return os.getenv("JWT_ALGORITHM", "HS256")
+
+
+def get_jwt_role_claim() -> str:
+    """Get the JWT claim name that stores RBAC roles."""
+    return os.getenv("JWT_ROLE_CLAIM", "roles")
+
+
+def get_jwt_issuer() -> str:
+    """Get the expected JWT issuer for PublicAPI."""
+    return os.getenv("JWT_ISSUER", "auth-service")
+
+
+def get_jwt_audience_discord() -> str:
+    """Get the expected JWT audience for DiscordConnector PublicAPI."""
+    return os.getenv("JWT_AUDIENCE_DISCORD", "discord-public-api")
+
+
+def validate_public_api_auth_config() -> None:
+    """Validate required PublicAPI authentication configuration."""
+    algorithm = get_jwt_algorithm()
+    if algorithm != "HS256":
+        raise ValueError(
+            f"Unsupported JWT_ALGORITHM: {algorithm!r}. Only 'HS256' is supported."
+        )
+    get_jwt_secret_key()
+    if not get_jwt_issuer():
+        raise ValueError("JWT_ISSUER is required for PublicAPI authentication")
+    if not get_jwt_audience_discord():
+        raise ValueError("JWT_AUDIENCE_DISCORD is required for PublicAPI authentication")
+
+
 # Module-level flag for convenience
 MOCK_MODE = is_mock_mode()
 DATABASE_URL = os.getenv("DATABASE_URL")

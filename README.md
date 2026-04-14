@@ -21,6 +21,7 @@ uv sync --all-packages
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_GUILD_ID`
 - `DISCORD_LOG_CHANNEL_ID` (DB 更新ログの送信先。未設定時は通知無効で warning を出します)
+- `JWT_SECRET_KEY` (`PublicAPI` が外部 Auth サービス発行 JWT を検証する共有鍵)
 
 DB も使うため、Supabase ローカル環境を起動して `DATABASE_URL` を設定します。
 
@@ -38,6 +39,11 @@ uv run uvicorn main:app --reload
 Discord Developer Portal では `Server Members Intent` を有効化してください。
 この実装では `Message Content Intent` と `Presence Intent` は不要です。
 
+`/health` を除く `PublicAPI` の全エンドポイントは `Authorization: Bearer <jwt>` が必須です。
+JWT はこのリポジトリでは発行せず、外部 Auth サービスが発行します。`PublicAPI` は
+`JWT_SECRET_KEY` と `HS256` で署名検証し、`roles` クレームの
+`viewer` / `operator` / `admin` を使って RBAC を適用します。
+
 ### モックモードで起動
 
 Discord への実接続が不要なら `MOCK_MODE=true` で起動できます。
@@ -46,6 +52,7 @@ Discord への実接続が不要なら `MOCK_MODE=true` で起動できます。
 supabase start
 supabase db reset --local
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
+export JWT_SECRET_KEY=replace_with_shared_jwt_secret
 cd DiscordConnector/PublicAPI
 MOCK_MODE=true uv run uvicorn main:app --reload
 ```
@@ -54,6 +61,24 @@ MOCK_MODE=true uv run uvicorn main:app --reload
 
 `ControlInterface` はサービス層で、単独で起動するエントリポイントはありません。
 そのため、操作用インターフェースとして別途 `ControlInterface` の起動手順を README に書く必要はありません。
+
+## AuthService の立ち上げ
+
+`AuthService` は `DiscordConnector/PublicAPI` 向けの JWT を発行します。
+
+```sh
+export JWT_SECRET_KEY=replace_with_shared_jwt_secret
+cd AuthService
+uv run uvicorn main:app --reload --port 8001
+```
+
+デフォルトの初期資格情報:
+
+- user: `admin` / `change-this-admin-password`
+- service account: `discord-sync` / `change-this-service-secret`
+
+本番や共有環境では `AUTH_BOOTSTRAP_USERS_JSON` / `AUTH_BOOTSTRAP_SERVICE_ACCOUNTS_JSON`
+で上書きしてください。
 
 ## テスト実行
 

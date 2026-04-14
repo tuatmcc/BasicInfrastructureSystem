@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.auth import require_admin
 from DiscordConnector.PublicAPI.dependencies import get_channel_service
 from ..schemas import ChannelCreate, ChannelResponse
 
@@ -8,6 +9,7 @@ router = APIRouter()
 @router.post("/create", response_model=ChannelResponse)
 async def create_channel(
     data: ChannelCreate,
+    _principal=Depends(require_admin),
     service=Depends(get_channel_service),
 ):
     category_id = int(data.category_id) if data.category_id is not None else None
