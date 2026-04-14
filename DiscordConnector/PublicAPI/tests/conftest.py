@@ -14,6 +14,8 @@ from typing import AsyncGenerator, Callable
 os.environ["MOCK_MODE"] = "true"
 os.environ["JWT_SECRET_KEY"] = "test-jwt-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
+os.environ["JWT_ISSUER"] = "auth-service"
+os.environ["JWT_AUDIENCE_DISCORD"] = "discord-public-api"
 
 repo_root = Path(__file__).resolve().parents[3]
 if str(repo_root) not in sys.path:
@@ -48,12 +50,16 @@ def create_test_jwt(
     roles: list[str] | None = None,
     expires_in: int = 3600,
     secret: str | None = None,
+    issuer: str = "auth-service",
+    audience: str | list[str] = "discord-public-api",
 ) -> str:
     """Create an HS256 JWT that matches PublicAPI's test configuration."""
     header = {"alg": "HS256", "typ": "JWT"}
     payload: dict[str, object] = {
         "sub": subject,
         "exp": int(time.time()) + expires_in,
+        "iss": issuer,
+        "aud": audience,
     }
     if roles is not None:
         payload["roles"] = roles
@@ -160,12 +166,16 @@ def make_auth_headers() -> Callable[..., dict[str, str]]:
         subject: str = "test-user",
         expires_in: int = 3600,
         secret: str | None = None,
+        issuer: str = "auth-service",
+        audience: str | list[str] = "discord-public-api",
     ) -> dict[str, str]:
         token = create_test_jwt(
             subject=subject,
             roles=roles,
             expires_in=expires_in,
             secret=secret,
+            issuer=issuer,
+            audience=audience,
         )
         return {"Authorization": f"Bearer {token}"}
 

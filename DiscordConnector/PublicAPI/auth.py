@@ -14,6 +14,8 @@ from fastapi import Depends, Request
 
 from DiscordConnector.config import (
     get_jwt_algorithm,
+    get_jwt_audience_discord,
+    get_jwt_issuer,
     get_jwt_role_claim,
     get_jwt_secret_key,
 )
@@ -91,6 +93,23 @@ def _verify_hs256(token: str, secret: str) -> dict[str, object]:
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         raise AuthenticationError("JWT subject is required")
+
+    issuer = payload.get("iss")
+    if issuer != get_jwt_issuer():
+        raise AuthenticationError("Unexpected JWT issuer")
+
+    audience = payload.get("aud")
+    expected_audience = get_jwt_audience_discord()
+    if isinstance(audience, str):
+        valid_audience = audience == expected_audience
+    elif isinstance(audience, list):
+        valid_audience = expected_audience in audience and all(
+            isinstance(item, str) for item in audience
+        )
+    else:
+        valid_audience = False
+    if not valid_audience:
+        raise AuthorizationError("JWT audience does not allow this API")
 
     return payload
 

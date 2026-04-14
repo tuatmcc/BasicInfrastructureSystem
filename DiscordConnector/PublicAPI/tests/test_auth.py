@@ -42,6 +42,14 @@ class TestAuthentication:
         assert response.status_code == 401
         assert response.json() == {"detail": "Authorization scheme must be Bearer"}
 
+    async def test_unexpected_issuer_returns_401(self, anon_client, make_auth_headers):
+        response = await anon_client.get(
+            "/api/v0/role/list",
+            headers=make_auth_headers(["viewer"], issuer="other-issuer"),
+        )
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Unexpected JWT issuer"}
+
 
 class TestAuthorization:
     async def test_missing_roles_claim_returns_403(self, anon_client, make_auth_headers):
@@ -92,3 +100,11 @@ class TestAuthorization:
         )
         assert response.status_code == 403
         assert response.json() == {"detail": "admin role is required"}
+
+    async def test_unexpected_audience_returns_403(self, anon_client, make_auth_headers):
+        response = await anon_client.get(
+            "/api/v0/role/list",
+            headers=make_auth_headers(["viewer"], audience="member-public-api"),
+        )
+        assert response.status_code == 403
+        assert response.json() == {"detail": "JWT audience does not allow this API"}

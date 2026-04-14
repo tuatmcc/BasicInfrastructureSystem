@@ -18,6 +18,7 @@ test = [
 
 [tool.uv.workspace]
 members = [
+  "AuthService",
   "DiscordConnector/DiscordController",
   "DiscordConnector/ControlInterface",
   "DiscordConnector/DiscordDatabaseController",
@@ -27,6 +28,7 @@ members = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = [
+    "AuthService/tests",
     "DiscordConnector/tests",
     "DiscordConnector/DiscordDatabaseController/tests",
     "DiscordConnector/DiscordController/tests",

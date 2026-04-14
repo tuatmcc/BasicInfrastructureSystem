@@ -101,6 +101,16 @@ def get_jwt_role_claim() -> str:
     return os.getenv("JWT_ROLE_CLAIM", "roles")
 
 
+def get_jwt_issuer() -> str:
+    """Get the expected JWT issuer for PublicAPI."""
+    return os.getenv("JWT_ISSUER", "auth-service")
+
+
+def get_jwt_audience_discord() -> str:
+    """Get the expected JWT audience for DiscordConnector PublicAPI."""
+    return os.getenv("JWT_AUDIENCE_DISCORD", "discord-public-api")
+
+
 def validate_public_api_auth_config() -> None:
     """Validate required PublicAPI authentication configuration."""
     algorithm = get_jwt_algorithm()
@@ -109,6 +119,10 @@ def validate_public_api_auth_config() -> None:
             f"Unsupported JWT_ALGORITHM: {algorithm!r}. Only 'HS256' is supported."
         )
     get_jwt_secret_key()
+    if not get_jwt_issuer():
+        raise ValueError("JWT_ISSUER is required for PublicAPI authentication")
+    if not get_jwt_audience_discord():
+        raise ValueError("JWT_AUDIENCE_DISCORD is required for PublicAPI authentication")
 
 
 # Module-level flag for convenience

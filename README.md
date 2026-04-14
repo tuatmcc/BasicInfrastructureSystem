@@ -62,6 +62,24 @@ MOCK_MODE=true uv run uvicorn main:app --reload
 `ControlInterface` はサービス層で、単独で起動するエントリポイントはありません。
 そのため、操作用インターフェースとして別途 `ControlInterface` の起動手順を README に書く必要はありません。
 
+## AuthService の立ち上げ
+
+`AuthService` は `DiscordConnector/PublicAPI` 向けの JWT を発行します。
+
+```sh
+export JWT_SECRET_KEY=replace_with_shared_jwt_secret
+cd AuthService
+uv run uvicorn main:app --reload --port 8001
+```
+
+デフォルトの初期資格情報:
+
+- user: `admin` / `change-this-admin-password`
+- service account: `discord-sync` / `change-this-service-secret`
+
+本番や共有環境では `AUTH_BOOTSTRAP_USERS_JSON` / `AUTH_BOOTSTRAP_SERVICE_ACCOUNTS_JSON`
+で上書きしてください。
+
 ## テスト実行
 
 ### 依存関係のインストール
