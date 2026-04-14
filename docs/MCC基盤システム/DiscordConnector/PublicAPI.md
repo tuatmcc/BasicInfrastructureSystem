@@ -12,3 +12,7 @@
 [Beta](PublicAPI/Beta.md)
 
 # Memo
+
+- `/health` を除く全エンドポイントは JWT Bearer 認証必須
+- JWT の発行は PublicAPI では行わず、外部 Auth サービスが担う
+- PublicAPI は共有秘密鍵で JWT を検証し、`roles` クレームで RBAC を行う

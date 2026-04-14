@@ -8,6 +8,11 @@ This module provides fixtures that combine:
 
 import os
 import sys
+import base64
+import hashlib
+import hmac
+import json
+import time
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -15,6 +20,8 @@ import pytest
 
 # Set MOCK_MODE before importing any project modules
 os.environ["MOCK_MODE"] = "true"
+os.environ["JWT_SECRET_KEY"] = "test-jwt-secret"
+os.environ["JWT_ALGORITHM"] = "HS256"
 
 repo_root = Path(__file__).resolve().parents[2]
 if str(repo_root) not in sys.path:
@@ -33,10 +40,34 @@ from DiscordConnector.DiscordDatabaseController.controller import (
 )
 from DiscordConnector.PublicAPI import dependencies
 from DiscordConnector.PublicAPI.api.v0 import router as v0_router
+from DiscordConnector.PublicAPI.error_handlers import register_exception_handlers
 from DiscordConnector.test_support.supabase import (
     get_test_database_url,
     reset_test_database,
 )
+
+
+def _encode_segment(value: dict[str, object]) -> str:
+    raw = json.dumps(value, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _create_test_jwt(roles: list[str]) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "sub": "integration-test-user",
+        "roles": roles,
+        "exp": int(time.time()) + 3600,
+    }
+    signing_input = f"{_encode_segment(header)}.{_encode_segment(payload)}"
+    signature = base64.urlsafe_b64encode(
+        hmac.new(
+            os.environ["JWT_SECRET_KEY"].encode("utf-8"),
+            signing_input.encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+    ).rstrip(b"=").decode("ascii")
+    return f"{signing_input}.{signature}"
 
 
 @pytest.fixture
@@ -92,6 +123,7 @@ async def integrated_client(
         title="Discord Connector Public API (Integration Test)",
         lifespan=test_lifespan,
     )
+    register_exception_handlers(app)
     app.include_router(v0_router, prefix="/api/v0")
 
     async def get_role_service_override():
@@ -116,7 +148,11 @@ async def integrated_client(
     app.dependency_overrides[dependencies.get_message_service] = get_message_service_override
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {_create_test_jwt(['admin'])}"},
+    ) as test_client:
         yield test_client
 
     dependencies._role_service = None
