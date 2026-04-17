@@ -23,7 +23,7 @@ class TestAuthentication:
             headers=make_auth_headers(["viewer"], secret="wrong-secret"),
         )
         assert response.status_code == 401
-        assert response.json() == {"detail": "Invalid JWT signature"}
+        assert response.json() == {"detail": "Invalid JWT"}
 
     async def test_expired_jwt_returns_401(self, anon_client, make_auth_headers):
         response = await anon_client.get(
@@ -50,6 +50,14 @@ class TestAuthentication:
         assert response.status_code == 401
         assert response.json() == {"detail": "Unexpected JWT issuer"}
 
+    async def test_unknown_signing_key_returns_401(self, anon_client, make_auth_headers):
+        response = await anon_client.get(
+            "/api/v0/role/list",
+            headers=make_auth_headers(["viewer"], key_id="unknown-key"),
+        )
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Unable to resolve JWT signing key"}
+
 
 class TestAuthorization:
     async def test_missing_roles_claim_returns_403(self, anon_client, make_auth_headers):
@@ -67,6 +75,14 @@ class TestAuthorization:
         )
         assert response.status_code == 403
         assert response.json() == {"detail": "viewer role is required"}
+
+    async def test_anon_supabase_role_returns_403(self, anon_client, make_auth_headers):
+        response = await anon_client.get(
+            "/api/v0/role/list",
+            headers=make_auth_headers(["viewer"], supabase_role="anon"),
+        )
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Supabase authenticated role is required"}
 
     async def test_viewer_can_access_read_endpoints(self, anon_client, make_auth_headers):
         response = await anon_client.get(
@@ -104,7 +120,7 @@ class TestAuthorization:
     async def test_unexpected_audience_returns_403(self, anon_client, make_auth_headers):
         response = await anon_client.get(
             "/api/v0/role/list",
-            headers=make_auth_headers(["viewer"], audience="member-public-api"),
+            headers=make_auth_headers(["viewer"], audience="anon"),
         )
         assert response.status_code == 403
         assert response.json() == {"detail": "JWT audience does not allow this API"}

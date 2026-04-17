@@ -7,7 +7,6 @@ WORKDIR /app
 
 # Copy dependency files first for better caching
 COPY pyproject.toml uv.lock ./
-COPY AuthService/pyproject.toml AuthService/
 COPY DiscordConnector/DiscordController/pyproject.toml DiscordConnector/DiscordController/
 COPY DiscordConnector/ControlInterface/pyproject.toml DiscordConnector/ControlInterface/
 COPY DiscordConnector/DiscordDatabaseController/pyproject.toml DiscordConnector/DiscordDatabaseController/

@@ -21,7 +21,7 @@ uv sync --all-packages
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_GUILD_ID`
 - `DISCORD_LOG_CHANNEL_ID` (DB 更新ログの送信先。未設定時は通知無効で warning を出します)
-- `JWT_SECRET_KEY` (`PublicAPI` が外部 Auth サービス発行 JWT を検証する共有鍵)
+- `SUPABASE_PROJECT_URL` (`PublicAPI` が Supabase Auth JWT を JWKS で検証するために使用)
 
 DB も使うため、Supabase ローカル環境を起動して `DATABASE_URL` を設定します。
 
@@ -40,9 +40,104 @@ Discord Developer Portal では `Server Members Intent` を有効化してくだ
 この実装では `Message Content Intent` と `Presence Intent` は不要です。
 
 `/health` を除く `PublicAPI` の全エンドポイントは `Authorization: Bearer <jwt>` が必須です。
-JWT はこのリポジトリでは発行せず、外部 Auth サービスが発行します。`PublicAPI` は
-`JWT_SECRET_KEY` と `HS256` で署名検証し、`roles` クレームの
+JWT はこのリポジトリでは発行せず、Supabase Auth が発行します。`PublicAPI` は
+Supabase JWKS 公開鍵で署名検証し、`app_metadata.discord_connector_roles` クレームの
 `viewer` / `operator` / `admin` を使って RBAC を適用します。
+
+### Supabase Auth の権限付与
+
+`PublicAPI` の権限は Supabase Auth ユーザーの `app_metadata.discord_connector_roles`
+に配列で設定します。Supabase の `user_metadata` はユーザー自身が更新できる構成に
+なり得るため、権限管理には使わないでください。
+
+設定例:
+
+```json
+{
+  "discord_connector_roles": ["admin"]
+}
+```
+
+Supabase Dashboard から設定する場合:
+
+1. Supabase Dashboard で対象プロジェクトを開く
+2. `Authentication` -> `Users` を開く
+3. 対象ユーザーを選択する
+4. `Raw App Meta Data` に `discord_connector_roles` を追加する
+5. ユーザーに再ログインさせ、access token に新しい `app_metadata` を反映させる
+
+サーバー側コードから設定する場合は、`service_role` key を使って
+Supabase Admin API で `app_metadata` を更新します。`service_role` key はブラウザや
+クライアントアプリに置かず、必ずサーバー側だけで扱ってください。
+
+```ts
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+);
+
+await supabaseAdmin.auth.admin.updateUserById(userId, {
+  app_metadata: {
+    discord_connector_roles: ["viewer", "operator"],
+  },
+});
+```
+
+権限の意味:
+
+- `viewer`: GET 系の読み取りエンドポイント
+- `operator`: `viewer` に加えてメッセージ作成・削除
+- `admin`: 全操作
+
+ローカル Supabase Auth で試す場合:
+
+```sh
+supabase start
+
+# supabase start の出力から anon key と service_role key を控える
+export SUPABASE_URL=http://127.0.0.1:54321
+export SUPABASE_ANON_KEY='<supabase start に表示される anon key>'
+export SUPABASE_SERVICE_ROLE_KEY='<supabase start に表示される service_role key>'
+
+# テストユーザーを作成
+curl -s "$SUPABASE_URL/auth/v1/signup" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"discord-admin@example.local","password":"password123"}'
+
+# ユーザーIDを控えて app_metadata に PublicAPI 権限を付与
+export SUPABASE_USER_ID='<signup レスポンスの user.id>'
+curl -s -X PUT "$SUPABASE_URL/auth/v1/admin/users/$SUPABASE_USER_ID" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"app_metadata":{"discord_connector_roles":["admin"]}}'
+
+# 再ログインして app_metadata 反映済みの access_token を取得
+curl -s "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"discord-admin@example.local","password":"password123"}'
+```
+
+`PublicAPI` をローカル Supabase Auth に向ける場合は以下を設定します。
+
+```sh
+export SUPABASE_PROJECT_URL=http://127.0.0.1:54321
+```
+
+現在の `PublicAPI` は JWKS による非対称鍵検証を前提にしています。ローカル Supabase の
+JWKS が空、または access token が HS256 の場合は検証できません。手元の環境で確認するには:
+
+```sh
+curl "$SUPABASE_URL/auth/v1/.well-known/jwks.json"
+```
+
+`keys` が空の場合、手動E2E確認には非対称 signing key を有効化した Supabase 環境か、
+リモートSupabaseプロジェクトを使ってください。リポジトリ内の `PublicAPI` 単体テストは、
+テスト用JWKSを差し込むためローカルSupabase Authには依存しません。
 
 ### モックモードで起動
 
@@ -52,7 +147,7 @@ Discord への実接続が不要なら `MOCK_MODE=true` で起動できます。
 supabase start
 supabase db reset --local
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
-export JWT_SECRET_KEY=replace_with_shared_jwt_secret
+export SUPABASE_PROJECT_URL=https://your-project-ref.supabase.co
 cd DiscordConnector/PublicAPI
 MOCK_MODE=true uv run uvicorn main:app --reload
 ```
@@ -61,24 +156,6 @@ MOCK_MODE=true uv run uvicorn main:app --reload
 
 `ControlInterface` はサービス層で、単独で起動するエントリポイントはありません。
 そのため、操作用インターフェースとして別途 `ControlInterface` の起動手順を README に書く必要はありません。
-
-## AuthService の立ち上げ
-
-`AuthService` は `DiscordConnector/PublicAPI` 向けの JWT を発行します。
-
-```sh
-export JWT_SECRET_KEY=replace_with_shared_jwt_secret
-cd AuthService
-uv run uvicorn main:app --reload --port 8001
-```
-
-デフォルトの初期資格情報:
-
-- user: `admin` / `change-this-admin-password`
-- service account: `discord-sync` / `change-this-service-secret`
-
-本番や共有環境では `AUTH_BOOTSTRAP_USERS_JSON` / `AUTH_BOOTSTRAP_SERVICE_ACCOUNTS_JSON`
-で上書きしてください。
 
 ## テスト実行
 

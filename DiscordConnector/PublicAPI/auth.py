@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import time
 from dataclasses import dataclass
 from typing import Annotated, Callable
 
 from fastapi import Depends, Request
+import jwt
+from jwt import InvalidTokenError, PyJWKClient
+from jwt.exceptions import (
+    ExpiredSignatureError,
+    InvalidAudienceError,
+    InvalidIssuerError,
+    PyJWKClientError,
+)
 
 from DiscordConnector.config import (
-    get_jwt_algorithm,
-    get_jwt_audience_discord,
-    get_jwt_issuer,
-    get_jwt_role_claim,
-    get_jwt_secret_key,
+    get_discord_connector_role_claim,
+    get_supabase_jwks_url,
+    get_supabase_jwt_algorithms,
+    get_supabase_jwt_audience,
+    get_supabase_jwt_issuer,
 )
 
 ROLE_HIERARCHY = {
@@ -44,79 +47,67 @@ class AuthPrincipal:
     claims: dict[str, object]
 
 
-def _decode_base64url(value: str) -> bytes:
-    padding = "=" * (-len(value) % 4)
-    try:
-        return base64.urlsafe_b64decode(value + padding)
-    except Exception as exc:  # pragma: no cover - narrow errors are not valuable here
-        raise AuthenticationError("Invalid JWT encoding") from exc
+_jwks_client: PyJWKClient | None = None
+_jwks_client_url: str | None = None
 
 
-def _decode_json_segment(value: str) -> dict[str, object]:
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client, _jwks_client_url
+    jwks_url = get_supabase_jwks_url()
+    if _jwks_client is None or _jwks_client_url != jwks_url:
+        _jwks_client = PyJWKClient(jwks_url)
+        _jwks_client_url = jwks_url
+    return _jwks_client
+
+
+def _verify_supabase_jwt(token: str) -> dict[str, object]:
     try:
-        decoded = _decode_base64url(value).decode("utf-8")
-        payload = json.loads(decoded)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise AuthenticationError("Invalid JWT payload") from exc
+        signing_key = _get_jwks_client().get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=get_supabase_jwt_algorithms(),
+            audience=get_supabase_jwt_audience(),
+            issuer=get_supabase_jwt_issuer(),
+            options={"require": ["exp", "sub", "aud", "iss"]},
+        )
+    except ExpiredSignatureError as exc:
+        raise AuthenticationError("JWT has expired") from exc
+    except InvalidAudienceError as exc:
+        raise AuthorizationError("JWT audience does not allow this API") from exc
+    except InvalidIssuerError as exc:
+        raise AuthenticationError("Unexpected JWT issuer") from exc
+    except PyJWKClientError as exc:
+        raise AuthenticationError("Unable to resolve JWT signing key") from exc
+    except InvalidTokenError as exc:
+        raise AuthenticationError("Invalid JWT") from exc
+
     if not isinstance(payload, dict):
         raise AuthenticationError("Invalid JWT payload")
-    return payload
-
-
-def _verify_hs256(token: str, secret: str) -> dict[str, object]:
-    try:
-        signing_input, signature = token.rsplit(".", 1)
-        header_segment, payload_segment = signing_input.split(".", 1)
-    except ValueError as exc:
-        raise AuthenticationError("Malformed JWT") from exc
-
-    header = _decode_json_segment(header_segment)
-    payload = _decode_json_segment(payload_segment)
-
-    algorithm = header.get("alg")
-    if algorithm != get_jwt_algorithm():
-        raise AuthenticationError("Unexpected JWT algorithm")
-
-    expected_signature = base64.urlsafe_b64encode(
-        hmac.new(secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256).digest()
-    ).rstrip(b"=").decode("ascii")
-    if not hmac.compare_digest(signature, expected_signature):
-        raise AuthenticationError("Invalid JWT signature")
-
-    exp = payload.get("exp")
-    if exp is not None:
-        if not isinstance(exp, int | float):
-            raise AuthenticationError("Invalid JWT expiration")
-        if exp <= time.time():
-            raise AuthenticationError("JWT has expired")
 
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         raise AuthenticationError("JWT subject is required")
 
-    issuer = payload.get("iss")
-    if issuer != get_jwt_issuer():
-        raise AuthenticationError("Unexpected JWT issuer")
-
-    audience = payload.get("aud")
-    expected_audience = get_jwt_audience_discord()
-    if isinstance(audience, str):
-        valid_audience = audience == expected_audience
-    elif isinstance(audience, list):
-        valid_audience = expected_audience in audience and all(
-            isinstance(item, str) for item in audience
-        )
-    else:
-        valid_audience = False
-    if not valid_audience:
-        raise AuthorizationError("JWT audience does not allow this API")
+    supabase_role = payload.get("role")
+    if supabase_role != "authenticated":
+        raise AuthorizationError("Supabase authenticated role is required")
 
     return payload
 
 
+def _get_claim_value(payload: dict[str, object], claim_path: str) -> object:
+    value: object = payload
+    for segment in claim_path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(segment)
+    return value
+
+
 def _extract_roles(payload: dict[str, object]) -> frozenset[str]:
-    role_claim = get_jwt_role_claim()
-    raw_roles = payload.get(role_claim, [])
+    role_claim = get_discord_connector_role_claim()
+    raw_roles = _get_claim_value(payload, role_claim)
     if raw_roles is None:
         raw_roles = []
     if not isinstance(raw_roles, list):
@@ -150,7 +141,7 @@ async def get_current_principal(
     if not token:
         raise AuthenticationError("Bearer token is required")
 
-    payload = _verify_hs256(token, get_jwt_secret_key())
+    payload = _verify_supabase_jwt(token)
     return AuthPrincipal(
         subject=payload["sub"],
         roles=_extract_roles(payload),

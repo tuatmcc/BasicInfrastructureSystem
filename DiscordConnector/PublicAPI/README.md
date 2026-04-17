@@ -20,7 +20,7 @@ DiscordController / DiscordDatabaseController
 
 ```bash
 export DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres
-export JWT_SECRET_KEY=replace_with_shared_jwt_secret
+export SUPABASE_PROJECT_URL=https://your-project-ref.supabase.co
 uvicorn main:app --reload
 ```
 
@@ -36,16 +36,20 @@ uvicorn main:app --reload
 ## Authentication
 
 All endpoints except `/health` require `Authorization: Bearer <jwt>`.
-JWTs are issued by an external auth service, not by `PublicAPI`.
+JWTs are issued by Supabase Auth, not by `PublicAPI`.
 
-- `JWT_SECRET_KEY` is required
-- `JWT_ALGORITHM` defaults to `HS256`
-- `JWT_ROLE_CLAIM` defaults to `roles`
+- `SUPABASE_PROJECT_URL` is required
+- `SUPABASE_JWT_AUDIENCE` defaults to `authenticated`
+- `SUPABASE_JWT_ALGORITHMS` defaults to `RS256,ES256`
+- `DISCORD_CONNECTOR_ROLE_CLAIM` defaults to `app_metadata.discord_connector_roles`
 
 Expected JWT claims:
 
 - `sub`: caller identifier
-- `roles`: array of role names
+- `iss`: `{SUPABASE_PROJECT_URL}/auth/v1`
+- `aud`: `authenticated` by default
+- `role`: `authenticated`
+- `app_metadata.discord_connector_roles`: array of DiscordConnector role names
 
 RBAC levels:
 
