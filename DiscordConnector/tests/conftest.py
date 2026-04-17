@@ -8,13 +8,22 @@ This module provides fixtures that combine:
 
 import os
 import sys
+import json
+import time
 from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt import PyJWK
+from jwt.exceptions import PyJWKClientError
 
 # Set MOCK_MODE before importing any project modules
 os.environ["MOCK_MODE"] = "true"
+os.environ["SUPABASE_PROJECT_URL"] = "https://supabase.test"
+os.environ["SUPABASE_JWT_AUDIENCE"] = "authenticated"
+os.environ["DISCORD_CONNECTOR_ROLE_CLAIM"] = "app_metadata.discord_connector_roles"
 
 repo_root = Path(__file__).resolve().parents[2]
 if str(repo_root) not in sys.path:
@@ -32,11 +41,51 @@ from DiscordConnector.DiscordDatabaseController.controller import (
     DiscordDatabaseController,
 )
 from DiscordConnector.PublicAPI import dependencies
+from DiscordConnector.PublicAPI import auth as public_auth
 from DiscordConnector.PublicAPI.api.v0 import router as v0_router
+from DiscordConnector.PublicAPI.error_handlers import register_exception_handlers
 from DiscordConnector.test_support.supabase import (
     get_test_database_url,
     reset_test_database,
 )
+
+
+TEST_KEY_ID = "integration-test-key"
+_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_PUBLIC_JWK_JSON = jwt.algorithms.RSAAlgorithm.to_jwk(_PRIVATE_KEY.public_key())
+_PUBLIC_JWK = PyJWK.from_json(
+    json.dumps({**json.loads(_PUBLIC_JWK_JSON), "kid": TEST_KEY_ID, "alg": "RS256"})
+)
+
+
+def _create_test_jwt(roles: list[str]) -> str:
+    payload = {
+        "sub": "integration-test-user",
+        "iss": "https://supabase.test/auth/v1",
+        "aud": "authenticated",
+        "role": "authenticated",
+        "app_metadata": {"discord_connector_roles": roles},
+        "exp": int(time.time()) + 3600,
+    }
+    return jwt.encode(
+        payload,
+        _PRIVATE_KEY,
+        algorithm="RS256",
+        headers={"kid": TEST_KEY_ID, "typ": "JWT"},
+    )
+
+
+class StaticJwksClient:
+    """Test-only JWKS client that never performs network I/O."""
+
+    def get_signing_key_from_jwt(self, token: str):
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.InvalidTokenError as exc:
+            raise PyJWKClientError("Invalid token header") from exc
+        if header.get("kid") != TEST_KEY_ID:
+            raise PyJWKClientError("Unable to find a signing key that matches")
+        return _PUBLIC_JWK
 
 
 @pytest.fixture
@@ -83,6 +132,8 @@ async def integrated_client(
     dependencies._category_service = category_service
     dependencies._member_service = member_service
     dependencies._message_service = message_service
+    public_auth._jwks_client = StaticJwksClient()
+    public_auth._jwks_client_url = "https://supabase.test/auth/v1/.well-known/jwks.json"
 
     @asynccontextmanager
     async def test_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -92,6 +143,7 @@ async def integrated_client(
         title="Discord Connector Public API (Integration Test)",
         lifespan=test_lifespan,
     )
+    register_exception_handlers(app)
     app.include_router(v0_router, prefix="/api/v0")
 
     async def get_role_service_override():
@@ -116,7 +168,11 @@ async def integrated_client(
     app.dependency_overrides[dependencies.get_message_service] = get_message_service_override
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+        headers={"Authorization": f"Bearer {_create_test_jwt(['admin'])}"},
+    ) as test_client:
         yield test_client
 
     dependencies._role_service = None
@@ -124,6 +180,8 @@ async def integrated_client(
     dependencies._category_service = None
     dependencies._member_service = None
     dependencies._message_service = None
+    public_auth._jwks_client = None
+    public_auth._jwks_client_url = None
 
 
 class IntegrationTestContext:

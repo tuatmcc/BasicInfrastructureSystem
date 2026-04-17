@@ -12,3 +12,7 @@
 [Beta](PublicAPI/Beta.md)
 
 # Memo
+
+- `/health` を除く全エンドポイントは JWT Bearer 認証必須
+- JWT の発行は PublicAPI では行わず、Supabase Auth が担う
+- PublicAPI は Supabase JWKS 公開鍵で JWT を検証し、`app_metadata.discord_connector_roles` クレームで RBAC を行う

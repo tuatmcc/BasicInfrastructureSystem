@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from DiscordConnector.PublicAPI.auth import require_admin
 from DiscordConnector.PublicAPI.dependencies import get_category_service
 from ..schemas import CategoryCreate, CategoryResponse
 
@@ -8,6 +9,7 @@ router = APIRouter()
 @router.post("/create", response_model=CategoryResponse)
 async def create_category(
     data: CategoryCreate,
+    _principal=Depends(require_admin),
     service=Depends(get_category_service),
 ):
     category = await service.create_category(data.name, data.position)
