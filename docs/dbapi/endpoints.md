@@ -25,6 +25,7 @@
 補足:
 
 - `POST /members/me` は、既に本人の `members` 行が存在する場合 `409 Conflict` を返す。
+- `POST /members/me` の成功時レスポンスは `204 No Content`（レスポンスボディなし）とする。
 
 ## フィルタ・ソート（`GET /members`）
 

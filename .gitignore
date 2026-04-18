@@ -210,3 +210,10 @@ __marimo__/
 # Supabase
 supabase/.temp/
 supabase/seed.sql
+
+# FrondEnd
+.next/
+
+
+# Node.js
+node_modules
