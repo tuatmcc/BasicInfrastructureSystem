@@ -1,0 +1,409 @@
+openapi: 3.0.3
+info:
+  title: MemberDatabase dbapi
+  version: 0.1.0
+  description: |
+    MemberDatabase を操作する dbapi の OpenAPI スキーマ。
+    認証は Supabase Auth、認可は Supabase RLS を前提とする。
+
+servers:
+  - url: /
+
+tags:
+  - name: Health
+  - name: Members
+  - name: DiscordConnector
+  - name: Users
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: 稼働確認用エンドポイント
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
+
+  /members/me:
+    post:
+      tags: [Members]
+      summary: Create my member row
+      description: 初回登録時に自分の members 行を作成する。既に存在する場合は 409 を返す。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Members]
+      summary: Get my member profile
+      description: 自分の登録情報を取得する
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Members]
+      summary: Update my member profile
+      description: 自分の登録情報を更新する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /members:
+    get:
+      tags: [Members]
+      summary: List members (Admin)
+      description: |
+        全ユーザーの登録情報一覧を取得する。
+        フィルタ・ソート対応。ページングは未導入。
+      parameters:
+        - name: grade
+          in: query
+          description: 学年（複数指定可）
+          required: false
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: some_allergy
+          in: query
+          description: アレルギー有無
+          required: false
+          schema:
+            type: boolean
+        - name: sort_by
+          in: query
+          description: ソート対象列
+          required: false
+          schema:
+            type: string
+            enum: [name, grade, updated_at]
+        - name: sort_order
+          in: query
+          description: ソート順
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /members/{member_id}:
+    parameters:
+      - $ref: '#/components/parameters/MemberId'
+
+    get:
+      tags: [Members]
+      summary: Get member by id (Admin)
+      description: 指定ユーザーの登録情報を取得する
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Members]
+      summary: Update member by id (Admin)
+      description: 指定ユーザーの登録情報を更新する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpdateRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{discord_user_id}/display-name:
+    parameters:
+      - $ref: '#/components/parameters/DiscordUserId'
+
+    patch:
+      tags: [DiscordConnector, Users]
+      summary: Reflect Discord display name
+      description: Discord 側表示名を users.display_name へ反映する（DiscordConnector ロール専用、users.member_id は変更不可）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                  description: Discord 側表示名
+              required: [display_name]
+      responses:
+        '204':
+          description: Updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    MemberId:
+      name: member_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    DiscordUserId:
+      name: discord_user_id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: Bad Request
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: Unauthorized
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: Forbidden
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: Not Found
+
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 409
+            message: Conflict
+
+  schemas:
+    Member:
+      type: object
+      properties:
+        member_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        grade:
+          type: integer
+        emergency_contact:
+          type: string
+        student_id:
+          type: string
+        student_email:
+          type: string
+          format: email
+        insurance:
+          type: boolean
+        some_allergy:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - member_id
+        - name
+        - grade
+        - emergency_contact
+        - student_id
+        - student_email
+        - insurance
+        - some_allergy
+        - created_at
+        - updated_at
+
+    MemberCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        grade:
+          type: integer
+        emergency_contact:
+          type: string
+        student_id:
+          type: string
+        student_email:
+          type: string
+          format: email
+        insurance:
+          type: boolean
+        some_allergy:
+          type: boolean
+      required:
+        - name
+        - grade
+        - emergency_contact
+        - student_id
+        - student_email
+
+    MemberUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        grade:
+          type: integer
+        emergency_contact:
+          type: string
+        student_id:
+          type: string
+        student_email:
+          type: string
+          format: email
+        insurance:
+          type: boolean
+        some_allergy:
+          type: boolean
+      minProperties: 1
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+      required:
+        - code
+        - message
