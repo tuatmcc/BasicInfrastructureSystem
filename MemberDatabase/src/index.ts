@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { Bindings, Variables } from './type'
 import { supabaseMiddleware } from './middleware/supabase'
-import name from './PublicAPI/name'
+import name from './PublicAPI/fullname'
 
 
 // 認証情報からユーザーIDを取得できるようにするためのTableがそのうち生える。
