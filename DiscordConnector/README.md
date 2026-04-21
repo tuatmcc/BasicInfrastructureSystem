@@ -77,6 +77,78 @@ OpenAPI ドキュメントもローカル Worker から確認できます。
   `DISCORD_GUILD_ID`、および想定 schema を持つローカル Postgres 接続文字列を
   設定してください。
 
+### ローカル Supabase の access token 取得
+
+ローカル Supabase で認証付き API を試す場合は、`supabase status` の
+`Project URL` と `Publishable` key を使って Supabase Auth にログインします。
+CLI のバージョンによっては `anon key` ではなく `Publishable` と表示されます。
+
+```sh
+supabase status
+```
+
+表示例:
+
+```txt
+Project URL  http://127.0.0.1:54321
+Publishable  sb_publishable_...
+Secret       sb_secret_...
+```
+
+`Secret` は service/admin 用です。ブラウザやフロントエンドには出さず、ローカル
+手元作業やサーバー側スクリプトでのみ使ってください。通常の signup/login には
+`Publishable` key を使います。
+
+```sh
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_KEY=sb_publishable_...
+```
+
+テストユーザーが未作成の場合は signup します。
+
+```sh
+curl -s -X POST "$SUPABASE_URL/auth/v1/signup" \
+  -H "apikey: $SUPABASE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"local@example.com","password":"password123"}'
+```
+
+DiscordConnector 用の権限は Supabase Auth ユーザーの
+`app_metadata.discord_connector_roles` に設定します。ローカルでは Studio
+`http://127.0.0.1:54323` の SQL Editor、または `psql` から直接更新できます。
+
+```sh
+psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+```
+
+```sql
+update auth.users
+set raw_app_meta_data =
+  coalesce(raw_app_meta_data, '{}'::jsonb)
+  || '{"discord_connector_roles":["admin"]}'::jsonb
+where email = 'local@example.com';
+```
+
+`admin` の代わりに、読み取りのみなら `viewer`、message create/delete までなら
+`operator` を設定します。
+
+権限を設定したあとにログインし、`access_token` を取得します。権限 claim は token
+発行時に入るため、権限変更前に取得した token はログインし直してください。
+
+```sh
+curl -s -X POST "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+  -H "apikey: $SUPABASE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"local@example.com","password":"password123"}'
+```
+
+レスポンスの `access_token` を `Authorization: Bearer` ヘッダーで渡します。
+
+```sh
+curl http://localhost:8787/api/v0/role/list \
+  -H "Authorization: Bearer <access_token>"
+```
+
 ## 設定
 
 次の値を Wrangler secrets またはローカル `.env` に設定します。
