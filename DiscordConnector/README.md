@@ -26,9 +26,25 @@ cp .env.example .env
 ```
 
 `MOCK_MODE=true` でも、Wrangler は `HYPERDRIVE` バインディング用のローカル
-接続文字列を要求します。mock controller はこの DB を使わないため、`/health`
-やインメモリ mock API の動作確認だけなら、ローカル Postgres 形式の
-プレースホルダー URL で十分です。
+接続文字列を要求します。Supabase CLI の `supabase start` でローカル Supabase
+を起動している場合、Postgres は通常 `127.0.0.1:54322` で待ち受けます。
+Wrangler には `SUPABASE_PROJECT_URL` とは別に、この Postgres 接続文字列を
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` として渡します。
+
+```sh
+supabase start
+cd DiscordConnector
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+pnpm exec wrangler dev --env-file .env --port 8787
+```
+
+`SUPABASE_PROJECT_URL` は Supabase Auth/API 用の URL です。ローカル Supabase
+では通常 `http://127.0.0.1:54321` を設定します。一方、
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` は Hyperdrive が
+ローカルで接続する Postgres 用の URL です。
+
+mock controller はこの DB を使わないため、`/health` やインメモリ mock API の
+動作確認だけなら、ローカル Postgres 形式のプレースホルダー URL でも十分です。
 
 ```sh
 export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres://postgres:postgres@127.0.0.1:5432/postgres
@@ -41,6 +57,11 @@ Worker が起動していることを確認します。
 curl http://localhost:8787/health
 # {"status":"ok"}
 ```
+
+OpenAPI ドキュメントもローカル Worker から確認できます。
+
+- `http://localhost:8787/docs`: Swagger UI
+- `http://localhost:8787/openapi.json`: OpenAPI JSON
 
 ローカル API テスト時の注意点:
 
