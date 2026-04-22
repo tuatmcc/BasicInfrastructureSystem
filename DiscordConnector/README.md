@@ -35,6 +35,9 @@ Wrangler には `SUPABASE_PROJECT_URL` とは別に、この Postgres 接続文�
 supabase start
 cd DiscordConnector
 export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+SSL_CERT_DIR=/etc/ssl/certs \
+NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
 pnpm exec wrangler dev --env-file .env --port 8787
 ```
 
@@ -43,11 +46,20 @@ pnpm exec wrangler dev --env-file .env --port 8787
 `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` は Hyperdrive が
 ローカルで接続する Postgres 用の URL です。
 
+NixOS などで `workerd` が `TLS peer's certificate is not trusted` または
+`unable to get local issuer certificate` を出す場合は、上記のように
+`SSL_CERT_FILE`、`SSL_CERT_DIR`、`NODE_EXTRA_CA_CERTS` を指定して Wrangler を
+再起動します。既に起動中の `wrangler dev` には後から環境変数を設定しても
+反映されません。
+
 mock controller はこの DB を使わないため、`/health` やインメモリ mock API の
 動作確認だけなら、ローカル Postgres 形式のプレースホルダー URL でも十分です。
 
 ```sh
 export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres://postgres:postgres@127.0.0.1:5432/postgres
+SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+SSL_CERT_DIR=/etc/ssl/certs \
+NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
 pnpm exec wrangler dev --env-file .env --port 8787
 ```
 
