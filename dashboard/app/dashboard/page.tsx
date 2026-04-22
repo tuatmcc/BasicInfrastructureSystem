@@ -69,7 +69,7 @@ export default function DashboardPage() {
       setError("");
       setMessage("");
 
-      const response = await fetch("/api/memberdb/api/v0/me", {
+      const response = await fetch("/api/memberdb/api/v0/members/me", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -116,7 +116,7 @@ export default function DashboardPage() {
     setError("");
     setMessage("");
 
-    const response = await fetch("/api/memberdb/api/v0/me", {
+    const response = await fetch("/api/memberdb/api/v0/members/me", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",

@@ -9,8 +9,8 @@ export default function SettingsPage() {
       value: process.env.NEXT_PUBLIC_SUPABASE_URL ? "設定済み" : "未設定",
     },
     {
-      key: "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      value: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "設定済み" : "未設定",
+      key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      value: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? "設定済み" : "未設定",
     },
     {
       key: "MEMBERDB_API_BASE_URL",

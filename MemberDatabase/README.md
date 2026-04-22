@@ -19,7 +19,7 @@ Pass the `CloudflareBindings` as generics when instantiation `Hono`:
 const app = new Hono<{ Bindings: CloudflareBindings }>()
 ```
 # 公開API一覧
-## `api/v1/me`
+## `api/v0/me`
 - ログイン中のユーザーなら誰でも実行可能
 
 ### GET
@@ -88,6 +88,22 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   ``` json
   {
   	"code" : <HTTPステータスコード>
+  }
+  ```
+
+## `api/v0/grades`
+- ログイン中のユーザーなら誰でも実行可能 (NOTE: これはセキュリティ上のリスクがあるため、より良い方法がある場合にはそれを提案してください)
+
+### GET
+- `public.grades`に格納されている`grades.id`と`grades.display_grade`の対応をjson配列で返す。
+#### レスポンス形式
+  ``` json
+  {
+  	"code" : <HTTPステータスコード> , 
+	"body" : [
+	  <grades.idの値> : <grades.display_gradeの値> , 
+	  ...
+	]
   }
   ```
 

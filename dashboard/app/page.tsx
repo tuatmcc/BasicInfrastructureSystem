@@ -1,27 +1,10 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Provider } from "@supabase/supabase-js";
 import { useAuth } from "@/components/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-
-type DiscordMember = {
-  id: string;
-  name: string;
-};
-
-type RegisterForm = {
-  name: string;
-  grade: string;
-  emergency_call: string;
-  student_id: string;
-  student_email: string;
-  insurance: "true" | "false";
-  some_allergy: "true" | "false";
-  discord_id: string;
-  discord_name: string;
-};
 
 type OAuthOption = {
   provider: Provider;
@@ -39,30 +22,24 @@ const oauthOptions: OAuthOption[] = [
   { provider: "notion", label: "Notion" },
 ];
 
-const initialRegisterForm: RegisterForm = {
-  name: "",
-  grade: "1",
-  emergency_call: "",
-  student_id: "",
-  student_email: "",
-  insurance: "false",
-  some_allergy: "false",
-  discord_id: "",
-  discord_name: "",
-};
-
-async function parseApiError(response: Response): Promise<string> {
-  try {
-    const data = (await response.json()) as { message?: string; error?: string };
-    return data.message ?? data.error ?? `HTTP ${response.status}`;
-  } catch {
-    return `HTTP ${response.status}`;
+function toAuthErrorMessage(error: { message: string } | null): string {
+  if (!error) {
+    return "認証に失敗しました。";
   }
+
+  if (error.message.includes("Unsupported provider") || error.message.includes("provider is not enabled")) {
+    return "このOAuthプロバイダはSupabaseで未有効化です。Supabase Dashboard > Authentication > Providers で有効化し、Callback URL を設定してください。";
+  }
+
+  return error.message;
 }
 
 export default function AuthEntryPage() {
   const router = useRouter();
   const { session } = useAuth();
+  const registrationRequired =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("registration") === "required";
 
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
   const [authMessage, setAuthMessage] = useState<string>("");
@@ -75,44 +52,8 @@ export default function AuthEntryPage() {
 
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
-  const [signupReady, setSignupReady] = useState(false);
+  const [signupMagicEmail, setSignupMagicEmail] = useState("");
   const [registering, setRegistering] = useState(false);
-  const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
-  const [discordMembers, setDiscordMembers] = useState<DiscordMember[]>([]);
-  const [discordSearch, setDiscordSearch] = useState("");
-
-  const filteredDiscordMembers = useMemo(() => {
-    const keyword = discordSearch.trim().toLowerCase();
-    if (!keyword) {
-      return discordMembers;
-    }
-    return discordMembers.filter((member) =>
-      member.name.toLowerCase().includes(keyword),
-    );
-  }, [discordMembers, discordSearch]);
-
-  async function fetchDiscordMembers(accessToken: string) {
-    const response = await fetch("/api/discord/api/v0/member/list", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(await parseApiError(response));
-    }
-
-    const data = (await response.json()) as DiscordMember[];
-    setDiscordMembers(data);
-    if (data.length > 0) {
-      setRegisterForm((prev) => ({
-        ...prev,
-        discord_id: data[0].id,
-        discord_name: data[0].name,
-      }));
-    }
-  }
 
   async function onPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -173,21 +114,23 @@ export default function AuthEntryPage() {
     });
 
     if (error) {
-      setAuthError(error.message);
+      setAuthError(toAuthErrorMessage(error));
     }
   }
 
-  async function onPrepareSignup(event: FormEvent<HTMLFormElement>) {
+  async function onPasswordRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setRegistering(true);
     setAuthError("");
     setAuthMessage("");
 
     const supabase = getSupabaseBrowserClient();
-
     const signUpResult = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
+      options: {
+        emailRedirectTo: `${window.location.origin}/enrollment`,
+      },
     });
 
     if (signUpResult.error) {
@@ -196,74 +139,74 @@ export default function AuthEntryPage() {
       return;
     }
 
+    const immediateToken = signUpResult.data.session?.access_token;
+
+    if (immediateToken) {
+      setRegistering(false);
+      router.push("/enrollment");
+      return;
+    }
+
     const signInResult = await supabase.auth.signInWithPassword({
       email: signupEmail,
       password: signupPassword,
     });
 
+    setRegistering(false);
+
     if (signInResult.error || !signInResult.data.session?.access_token) {
-      setRegistering(false);
       setAuthMessage(
-        "アカウントを作成しました。メール認証が必要な設定のため、認証後にログインして登録を完了してください。",
+        "Authへの登録は完了しました。確認メールのリンクから入部届画面へ進んでください。",
       );
       return;
     }
 
-    try {
-      await fetchDiscordMembers(signInResult.data.session.access_token);
-      setSignupReady(true);
-      setAuthMessage("Discordユーザー一覧を取得しました。登録情報を入力して完了してください。");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Discordユーザー一覧の取得に失敗しました。");
-    } finally {
-      setRegistering(false);
-    }
+    router.push("/enrollment");
   }
 
-  async function onCompleteRegistration(event: FormEvent<HTMLFormElement>) {
+  async function onMagicLinkRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!session?.access_token) {
-      setAuthError("先にアカウント作成ステップを完了してください。");
-      return;
-    }
-
-    if (!registerForm.discord_name) {
-      setAuthError("Discord表示名を選択してください。");
-      return;
-    }
-
     setRegistering(true);
     setAuthError("");
     setAuthMessage("");
 
-    const response = await fetch("/api/memberdb/api/v0/me", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email: signupMagicEmail,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/enrollment`,
       },
-      body: JSON.stringify({
-        full_name: registerForm.name,
-        discord_name: registerForm.discord_name,
-        grade: Number(registerForm.grade),
-        student_id: registerForm.student_id,
-        emergency_contact: registerForm.emergency_call,
-        student_email: registerForm.student_email,
-        insurance: registerForm.insurance === "true",
-        some_allergy: registerForm.some_allergy === "true",
-      }),
     });
 
     setRegistering(false);
 
-    if (!response.ok) {
-      setAuthError(await parseApiError(response));
+    if (error) {
+      setAuthError(toAuthErrorMessage(error));
       return;
     }
 
-    setAuthMessage("登録が完了しました。ダッシュボードへ移動します。");
-    router.push("/dashboard");
+    setAuthMessage("登録用Magic Linkを送信しました。リンクから入部届画面へ進んでください。");
+  }
+
+  async function onOAuthRegister(provider: Provider) {
+    setRegistering(true);
+    setAuthError("");
+    setAuthMessage("");
+
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/enrollment`,
+      },
+    });
+
+    setRegistering(false);
+
+    if (error) {
+      setAuthError(toAuthErrorMessage(error));
+    }
   }
 
   return (
@@ -279,6 +222,11 @@ export default function AuthEntryPage() {
               ログイン後は、MemberDatabase と DiscordConnector の既存APIを経由して
               部員情報管理とDiscord管理を行えます。
             </p>
+            {registrationRequired ? (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                ダッシュボードを利用するには、先に入部届の登録を完了してください。
+              </p>
+            ) : null}
             {session ? (
               <button
                 type="button"
@@ -392,9 +340,13 @@ export default function AuthEntryPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <form className="space-y-3" onSubmit={onPrepareSignup}>
-                  <h2 className="text-sm font-semibold text-slate-700">1. Supabaseアカウント作成</h2>
+              <div className="space-y-6">
+                <p className="text-sm text-slate-600">
+                  まず登録手段を選択してください。Auth登録完了後、入部届画面へ遷移します。
+                </p>
+
+                <form className="space-y-3" onSubmit={onPasswordRegister}>
+                  <h2 className="text-sm font-semibold text-slate-700">メールアドレス + パスワードで登録</h2>
                   <input
                     type="email"
                     required
@@ -417,136 +369,45 @@ export default function AuthEntryPage() {
                     disabled={registering}
                     className="w-full rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60"
                   >
-                    アカウント作成してDiscord候補を取得
+                    登録
                   </button>
                 </form>
 
-                <form className="space-y-3" onSubmit={onCompleteRegistration}>
-                  <h2 className="text-sm font-semibold text-slate-700">2. 部員情報登録</h2>
-                  <input
-                    type="text"
-                    required
-                    disabled={!signupReady}
-                    value={registerForm.name}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({ ...prev, name: event.target.value }))
-                    }
-                    placeholder="氏名"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    disabled={!signupReady}
-                    value={registerForm.grade}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({ ...prev, grade: event.target.value }))
-                    }
-                    placeholder="学年(数値)"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  />
-                  <input
-                    type="text"
-                    required
-                    disabled={!signupReady}
-                    value={registerForm.emergency_call}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({ ...prev, emergency_call: event.target.value }))
-                    }
-                    placeholder="緊急連絡先"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  />
-                  <input
-                    type="text"
-                    required
-                    disabled={!signupReady}
-                    value={registerForm.student_id}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({ ...prev, student_id: event.target.value }))
-                    }
-                    placeholder="学籍番号"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  />
+                <form className="space-y-3" onSubmit={onMagicLinkRegister}>
+                  <h2 className="text-sm font-semibold text-slate-700">Magic Linkで登録</h2>
                   <input
                     type="email"
                     required
-                    disabled={!signupReady}
-                    value={registerForm.student_email}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({ ...prev, student_email: event.target.value }))
-                    }
-                    placeholder="学内メールアドレス"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                    value={signupMagicEmail}
+                    onChange={(event) => setSignupMagicEmail(event.target.value)}
+                    placeholder="email@example.com"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                   />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <select
-                      disabled={!signupReady}
-                      value={registerForm.insurance}
-                      onChange={(event) =>
-                        setRegisterForm((prev) => ({
-                          ...prev,
-                          insurance: event.target.value as "true" | "false",
-                        }))
-                      }
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                    >
-                      <option value="true">保険加入: あり</option>
-                      <option value="false">保険加入: なし</option>
-                    </select>
-                    <select
-                      disabled={!signupReady}
-                      value={registerForm.some_allergy}
-                      onChange={(event) =>
-                        setRegisterForm((prev) => ({
-                          ...prev,
-                          some_allergy: event.target.value as "true" | "false",
-                        }))
-                      }
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                    >
-                      <option value="true">アレルギー: あり</option>
-                      <option value="false">アレルギー: なし</option>
-                    </select>
-                  </div>
-
-                  <input
-                    type="text"
-                    disabled={!signupReady}
-                    value={discordSearch}
-                    onChange={(event) => setDiscordSearch(event.target.value)}
-                    placeholder="Discord表示名で検索"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  />
-                  <select
-                    required
-                    disabled={!signupReady}
-                    value={registerForm.discord_id}
-                    onChange={(event) => {
-                      const selected = discordMembers.find((member) => member.id === event.target.value);
-                      setRegisterForm((prev) => ({
-                        ...prev,
-                        discord_id: event.target.value,
-                        discord_name: selected?.name ?? "",
-                      }));
-                    }}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
-                  >
-                    {filteredDiscordMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name} ({member.id})
-                      </option>
-                    ))}
-                  </select>
-
                   <button
                     type="submit"
-                    disabled={!signupReady || registering}
-                    className="w-full rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                    disabled={registering}
+                    className="w-full rounded-lg border border-cyan-700 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 disabled:opacity-60"
                   >
-                    新規登録を完了
+                    登録
                   </button>
                 </form>
+
+                <div>
+                  <h2 className="mb-2 text-sm font-semibold text-slate-700">OAuthで登録</h2>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {oauthOptions.map((item) => (
+                      <button
+                        key={item.provider}
+                        type="button"
+                        disabled={registering}
+                        onClick={() => void onOAuthRegister(item.provider)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                      >
+                        登録 ({item.label})
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </section>

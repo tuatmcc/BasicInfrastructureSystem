@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useAuth } from "@/components/auth-provider";
 
@@ -23,11 +23,54 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { loading, session, user, isAdmin } = useAuth();
+  const [registrationCheckLoading, setRegistrationCheckLoading] = useState(true);
+  const [registered, setRegistered] = useState(false);
 
   const visibleItems = useMemo(
     () => navItems.filter((item) => !item.adminOnly || isAdmin),
     [isAdmin],
   );
+
+  useEffect(() => {
+    const token = session?.access_token;
+
+    if (!token) {
+      return;
+    }
+
+    let active = true;
+
+    async function verifyRegistration() {
+      setRegistrationCheckLoading(true);
+
+      const response = await fetch("/api/memberdb/api/v0/members/me", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!active) {
+        return;
+      }
+
+      if (response.ok) {
+        setRegistered(true);
+        setRegistrationCheckLoading(false);
+        return;
+      }
+
+      setRegistered(false);
+      setRegistrationCheckLoading(false);
+      router.replace("/?registration=required");
+    }
+
+    void verifyRegistration();
+
+    return () => {
+      active = false;
+    };
+  }, [router, session?.access_token]);
 
   if (loading) {
     return <p className="p-6 text-sm text-slate-700">認証状態を確認しています...</p>;
@@ -35,6 +78,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (!session) {
     router.replace("/");
+    return null;
+  }
+
+  if (registrationCheckLoading) {
+    return <p className="p-6 text-sm text-slate-700">部員登録状態を確認しています...</p>;
+  }
+
+  if (!registered) {
     return null;
   }
 
