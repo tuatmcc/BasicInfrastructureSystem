@@ -19,12 +19,13 @@ Pass the `CloudflareBindings` as generics when instantiation `Hono`:
 const app = new Hono<{ Bindings: CloudflareBindings }>()
 ```
 # 公開API一覧
-## `api/v0/me`
+## `api/v1/me`
 - ログイン中のユーザーなら誰でも実行可能
 
 ### GET
 - ログイン中のユーザの情報を取得する。
-- レスポンス形式
+
+#### レスポンス形式
   ```json
   {
   "code" : <HTTPステータスコード> , 
@@ -39,6 +40,34 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   	"insurance" : <保険加入状況> , 
   	"some_allergy": <アレルギーの有無>
   }
+  }
+  ```
+
+### POST
+- 新規登録時に呼び出すエンドポイント
+
+#### リクエスト形式
+  ```json
+  {
+  "code" : <HTTPステータスコード> , 
+  "body" : {
+  	"full_name": <本名> , 
+  	"discord_name" : <Discord表示名> , 
+  	"grade": <内部で管理している学年番号> , 
+  	"display_grade" : <表示上の学年> , 
+  	"student_id": <学籍番号> , 
+  	"emergency_contact": <緊急連絡先> , 
+  	"student_email" : <学内メアド> ,
+  	"insurance" : <保険加入状況> , 
+  	"some_allergy": <アレルギーの有無>
+  }
+  }
+  ```
+
+#### レスポンス形式
+  ``` json
+  {
+  	"code" : <HTTPステータスコード>
   }
   ```
 
@@ -63,6 +92,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   ```
 
 
+
 ## `api/v0/members?` 
 - 管理者のみ実行可能
 ### GET
@@ -70,7 +100,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 
 #### リクエスト形式
 - クエリパラメータによる条件指定が可能
-#### クエリパラメータ一覧
+##### クエリパラメータ一覧
 - `?enroll_year_min=` : 入学年が指定した値以上の行を返す。
   - 例: `?genroll_year_min=2023` → 入学年が `2023` 以上の人の情報のみ返す
 - `?enroll_year_max=` : 入学年が指定した値以下の行を返す。
