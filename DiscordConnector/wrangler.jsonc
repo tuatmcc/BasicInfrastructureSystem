@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discord-connector",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "replace-with-hyperdrive-id"
+    }
+  ],
+  "vars": {
+    "SUPABASE_JWT_AUDIENCE": "authenticated",
+    "SUPABASE_JWT_ALGORITHMS": "RS256,ES256",
+    "DISCORD_CONNECTOR_ROLE_CLAIM": "app_metadata.discord_connector_roles"
+  }
+}

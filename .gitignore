@@ -160,6 +160,10 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# Node / Cloudflare Workers
+node_modules/
+.wrangler/
+
 # Pyre type checker
 .pyre/
 
