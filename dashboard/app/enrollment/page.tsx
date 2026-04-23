@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import type { User } from "@supabase/supabase-js";
 
 type DiscordMember = {
   id: string;
@@ -22,7 +23,6 @@ type EnrollmentForm = {
   student_email: string;
   insurance: "" | "true" | "false";
   some_allergy: "" | "true" | "false";
-  discord_id: string;
   discord_name: string;
 };
 
@@ -34,9 +34,148 @@ const initialForm: EnrollmentForm = {
   student_email: "",
   insurance: "",
   some_allergy: "",
-  discord_id: "",
   discord_name: "",
 };
+
+type GradesResponse = {
+  code: number;
+  body?: unknown;
+};
+
+type GradeCandidate = {
+  id: number;
+  displayGrade: string;
+};
+
+function toGradeCandidate(rawId: unknown, rawLabel: unknown): GradeCandidate | null {
+  const id = Number(rawId);
+  if (Number.isNaN(id) || rawLabel === undefined || rawLabel === null) {
+    return null;
+  }
+  return { id, displayGrade: String(rawLabel) };
+}
+
+function extractGradeCandidates(input: unknown): GradeCandidate[] {
+  if (input === null || input === undefined) {
+    return [];
+  }
+
+  if (Array.isArray(input)) {
+    return input
+      .flatMap((item) => {
+        if (Array.isArray(item) && item.length >= 2) {
+          const candidate = toGradeCandidate(item[0], item[1]);
+          return candidate ? [candidate] : [];
+        }
+
+        if (item && typeof item === "object") {
+          const row = item as Record<string, unknown>;
+          const directCandidate = toGradeCandidate(
+            row.id,
+            row.display_grade ?? row.displayGrade ?? row.label ?? row.name,
+          );
+          if (directCandidate) {
+            return [directCandidate];
+          }
+          return extractGradeCandidates(row);
+        }
+
+        return [];
+      })
+      .filter((item) => item.displayGrade.trim().length > 0);
+  }
+
+  if (typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+
+    if ("body" in obj) {
+      const nested = extractGradeCandidates(obj.body);
+      if (nested.length > 0) {
+        return nested;
+      }
+    }
+
+    if ("data" in obj) {
+      const nested = extractGradeCandidates(obj.data);
+      if (nested.length > 0) {
+        return nested;
+      }
+    }
+
+    return Object.entries(obj)
+      .flatMap(([key, value]) => {
+        if (key === "code" || key === "status" || key === "message" || key === "error") {
+          return [];
+        }
+
+        if (value && typeof value === "object") {
+          const row = value as Record<string, unknown>;
+          const candidate = toGradeCandidate(
+            row.id ?? key,
+            row.display_grade ?? row.displayGrade ?? row.label ?? row.name,
+          );
+          if (candidate) {
+            return [candidate];
+          }
+
+          const nested = extractGradeCandidates(value);
+          return nested;
+        }
+
+        const candidate = toGradeCandidate(key, value);
+        return candidate ? [candidate] : [];
+      })
+      .filter((item) => item.displayGrade.trim().length > 0);
+  }
+
+  return [];
+}
+
+function normalizeGradeOptions(json: GradesResponse): GradeOption[] {
+  const uniqueById = new Map<number, string>();
+  for (const candidate of extractGradeCandidates(json)) {
+    if (!uniqueById.has(candidate.id)) {
+      uniqueById.set(candidate.id, candidate.displayGrade);
+    }
+  }
+
+  return [...uniqueById.entries()]
+    .map(([id, displayGrade]) => ({ id, displayGrade }))
+    .sort((a, b) => a.id - b.id);
+}
+
+function discordCandidatesFromUser(user: User | null | undefined): DiscordMember[] {
+  if (!user) {
+    return [];
+  }
+
+  const rawMetadata = user.user_metadata;
+  const metadata =
+    rawMetadata && typeof rawMetadata === "object"
+      ? (rawMetadata as Record<string, unknown>)
+      : undefined;
+
+  const candidateNames = [
+    metadata?.preferred_username,
+    metadata?.user_name,
+    metadata?.name,
+    metadata?.full_name,
+    metadata?.nick_name,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  const uniqueNames = [...new Set(candidateNames)];
+  if (uniqueNames.length === 0) {
+    return [];
+  }
+
+  return uniqueNames.map((name) => ({
+    id: user.id,
+    name,
+  }));
+}
 
 type SearchableDropdownProps = {
   label: string;
@@ -136,6 +275,7 @@ export default function EnrollmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
 
   const [grades, setGrades] = useState<GradeOption[]>([]);
   const [discordMembers, setDiscordMembers] = useState<DiscordMember[]>([]);
@@ -158,6 +298,7 @@ export default function EnrollmentPage() {
     async function bootstrap() {
       setBooting(true);
       setError("");
+      setWarning("");
 
       const meResponse = await fetch("/api/memberdb/api/v0/members/me", {
         headers: { Authorization: `Bearer ${token}` },
@@ -178,14 +319,9 @@ export default function EnrollmentPage() {
         return;
       }
 
-      const [gradesResponse, discordResponse] = await Promise.all([
-        fetch("/api/memberdb/api/v0/grades", {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch("/api/discord/api/v0/member/list", {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const gradesResponse = await fetch("/api/memberdb/api/v0/grades", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!active) {
         return;
@@ -197,25 +333,54 @@ export default function EnrollmentPage() {
         return;
       }
 
-      if (!discordResponse.ok) {
-        setError(`Discord候補の取得に失敗しました: ${await parseError(discordResponse)}`);
-        setBooting(false);
-        return;
+      const gradesJson = (await gradesResponse.json()) as GradesResponse;
+      const normalizedGrades = normalizeGradeOptions(gradesJson);
+      setGrades(normalizedGrades);
+      if (normalizedGrades.length === 0) {
+        setWarning("学年候補が0件でした。MemberDBのgradesデータまたはレスポンス形式を確認してください。");
       }
 
-      const gradesJson = (await gradesResponse.json()) as {
-        code: number;
-        body: Record<string, string>;
-      };
-      const discordJson = (await discordResponse.json()) as DiscordMember[];
+      const localDiscordCandidates = discordCandidatesFromUser(session?.user);
+      let remoteDiscordCandidates: DiscordMember[] = [];
 
-      const gradeOptions = Object.entries(gradesJson.body)
-        .map(([id, displayGrade]) => ({ id: Number(id), displayGrade }))
-        .filter((item) => !Number.isNaN(item.id))
-        .sort((a, b) => a.id - b.id);
+      try {
+        const discordResponse = await fetch("/api/discord/api/v0/member/list", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      setGrades(gradeOptions);
-      setDiscordMembers(discordJson);
+        if (discordResponse.ok) {
+          const discordJson = (await discordResponse.json()) as unknown;
+          if (Array.isArray(discordJson)) {
+            remoteDiscordCandidates = discordJson
+              .map((item) => {
+                if (!item || typeof item !== "object") {
+                  return null;
+                }
+                const row = item as { id?: unknown; name?: unknown };
+                if (typeof row.id !== "string" || typeof row.name !== "string") {
+                  return null;
+                }
+                return { id: row.id, name: row.name };
+              })
+              .filter((item): item is DiscordMember => item !== null);
+          }
+        } else {
+          setWarning(`Discord候補の取得に失敗しました: ${await parseError(discordResponse)}`);
+        }
+      } catch {
+        setWarning("Discord候補の取得に失敗しました。Discord表示名は手入力してください。");
+      }
+
+      const mergedDiscordCandidates = [...remoteDiscordCandidates, ...localDiscordCandidates].filter(
+        (candidate, index, array) =>
+          array.findIndex((item) => item.id === candidate.id && item.name === candidate.name) === index,
+      );
+      setDiscordMembers(mergedDiscordCandidates);
+
+      if (mergedDiscordCandidates.length === 0) {
+        setWarning("Discord候補が見つからなかったため、Discord表示名は手入力してください。");
+      }
+
       setBooting(false);
     }
 
@@ -224,7 +389,7 @@ export default function EnrollmentPage() {
     return () => {
       active = false;
     };
-  }, [loading, router, session?.access_token]);
+  }, [loading, router, session?.access_token, session?.user]);
 
   const gradeDropdownOptions = useMemo(
     () => grades.map((item) => ({ value: String(item.id), label: item.displayGrade })),
@@ -232,7 +397,7 @@ export default function EnrollmentPage() {
   );
 
   const discordDropdownOptions = useMemo(
-    () => discordMembers.map((item) => ({ value: item.id, label: `${item.name} (${item.id})` })),
+    () => discordMembers.map((item) => ({ value: item.name, label: `${item.name} (${item.id})` })),
     [discordMembers],
   );
 
@@ -246,8 +411,7 @@ export default function EnrollmentPage() {
       emailPattern.test(form.student_email.trim()) &&
       form.insurance !== "" &&
       form.some_allergy !== "" &&
-      form.discord_id.length > 0 &&
-      form.discord_name.length > 0 &&
+      form.discord_name.trim().length > 0 &&
       !submitting
     );
   }, [form, submitting]);
@@ -303,6 +467,12 @@ export default function EnrollmentPage() {
         {error ? (
           <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
             {error}
+          </p>
+        ) : null}
+
+        {warning ? (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            {warning}
           </p>
         ) : null}
 
@@ -406,21 +576,34 @@ export default function EnrollmentPage() {
             </label>
 
             <div className="md:col-span-2">
-              <SearchableDropdown
-                label="Discord表示名"
-                placeholder="Discord表示名を選択"
-                searchPlaceholder="Discord表示名で検索"
-                options={discordDropdownOptions}
-                value={form.discord_id}
-                onChange={(value) => {
-                  const selected = discordMembers.find((item) => item.id === value);
-                  setForm((prev) => ({
-                    ...prev,
-                    discord_id: value,
-                    discord_name: selected?.name ?? "",
-                  }));
-                }}
-              />
+              {discordDropdownOptions.length > 0 ? (
+                <SearchableDropdown
+                  label="Discord表示名"
+                  placeholder="Discord表示名を選択"
+                  searchPlaceholder="Discord表示名で検索"
+                  options={discordDropdownOptions}
+                  value={form.discord_name}
+                  onChange={(value) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      discord_name: value,
+                    }));
+                  }}
+                />
+              ) : (
+                <label className="text-sm text-slate-700">
+                  Discord表示名
+                  <input
+                    type="text"
+                    value={form.discord_name}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, discord_name: event.target.value }))
+                    }
+                    placeholder="Discord表示名を入力"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+              )}
             </div>
           </div>
         ) : null}

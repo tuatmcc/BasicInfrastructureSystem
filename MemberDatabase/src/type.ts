@@ -4,6 +4,7 @@ import type { SupabaseClient, User } from '@supabase/supabase-js'
 export type Bindings = {
   SUPABASE_URL: string
   SUPABASE_PUBLISHABLE_KEY: string
+  SUPABASE_SECRET_KEY?: string
 }
 
 // HonoのContext（c.set / c.get）で持ち回る変数の型
