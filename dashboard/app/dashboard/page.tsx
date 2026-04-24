@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { SearchableDropdown } from "@/components/searchable-dropdown";
+import { normalizeGradeOptions, type GradeOption } from "@/lib/grade-options";
 
 type MeBody = {
   full_name: string;
@@ -44,6 +46,8 @@ function toEditableForm(body: MeBody): EditableMeForm {
   };
 }
 
+type GradesResponse = unknown;
+
 async function readError(response: Response): Promise<string> {
   try {
     const json = (await response.json()) as { message?: string; error?: string };
@@ -61,6 +65,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [me, setMe] = useState<MeBody | null>(null);
   const [form, setForm] = useState<EditableMeForm | null>(null);
+  const [grades, setGrades] = useState<GradeOption[]>([]);
 
   useEffect(() => {
     async function loadMe() {
@@ -97,13 +102,31 @@ export default function DashboardPage() {
         return;
       }
 
+      const gradesResponse = await fetch("/api/memberdb/api/v0/grades", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!gradesResponse.ok) {
+        setError(await readError(gradesResponse));
+        setLoading(false);
+        return;
+      }
+
       setMe(json.body);
       setForm(toEditableForm(json.body));
+      setGrades(normalizeGradeOptions((await gradesResponse.json()) as GradesResponse));
       setLoading(false);
     }
 
     void loadMe();
   }, [router, session?.access_token]);
+
+  const gradeDropdownOptions = useMemo(
+    () => grades.map((item) => ({ value: String(item.id), label: item.displayGrade })),
+    [grades],
+  );
 
   const readonlyRows = useMemo(
     () => [
@@ -195,17 +218,14 @@ export default function DashboardPage() {
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </label>
-          <label className="text-sm text-slate-700">
-            学年(数値)
-            <input
-              type="number"
-              min={1}
-              required
-              value={form.grade}
-              onChange={(event) => setForm((prev) => prev && { ...prev, grade: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-            />
-          </label>
+          <SearchableDropdown
+            label="学年"
+            placeholder="学年を選択"
+            searchPlaceholder="学年で検索"
+            options={gradeDropdownOptions}
+            value={form.grade}
+            onChange={(value) => setForm((prev) => prev && { ...prev, grade: value })}
+          />
           <label className="text-sm text-slate-700">
             緊急連絡先
             <input

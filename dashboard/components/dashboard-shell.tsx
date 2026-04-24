@@ -32,9 +32,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    const token = session?.access_token;
+    const initialToken = session?.access_token;
 
-    if (!token) {
+    if (!initialToken) {
       return;
     }
 
@@ -59,7 +59,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     async function verifyRegistration() {
       setRegistrationCheckLoading(true);
 
-      let currentToken = token;
+      let currentToken = initialToken!;
       let result = await fetchRegistrationStatus(currentToken);
 
       if (result.response.status === 401 || result.response.status === 404) {

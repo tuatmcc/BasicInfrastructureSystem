@@ -3,17 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { SearchableDropdown } from "@/components/searchable-dropdown";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { normalizeGradeOptions, type GradeOption } from "@/lib/grade-options";
 import type { User } from "@supabase/supabase-js";
 
 type DiscordMember = {
   id: string;
   name: string;
-};
-
-type GradeOption = {
-  id: number;
-  displayGrade: string;
 };
 
 type EnrollmentForm = {
@@ -38,11 +35,6 @@ const initialForm: EnrollmentForm = {
   discord_name: "",
 };
 
-type GradesResponse = {
-  code: number;
-  body?: unknown;
-};
-
 type MeBody = {
   full_name: string;
   discord_name: string | null;
@@ -60,108 +52,6 @@ type MeResponse = {
   body: MeBody;
   needs_enrollment?: boolean;
 };
-
-type GradeCandidate = {
-  id: number;
-  displayGrade: string;
-};
-
-function toGradeCandidate(rawId: unknown, rawLabel: unknown): GradeCandidate | null {
-  const id = Number(rawId);
-  if (Number.isNaN(id) || rawLabel === undefined || rawLabel === null) {
-    return null;
-  }
-  return { id, displayGrade: String(rawLabel) };
-}
-
-function extractGradeCandidates(input: unknown): GradeCandidate[] {
-  if (input === null || input === undefined) {
-    return [];
-  }
-
-  if (Array.isArray(input)) {
-    return input
-      .flatMap((item) => {
-        if (Array.isArray(item) && item.length >= 2) {
-          const candidate = toGradeCandidate(item[0], item[1]);
-          return candidate ? [candidate] : [];
-        }
-
-        if (item && typeof item === "object") {
-          const row = item as Record<string, unknown>;
-          const directCandidate = toGradeCandidate(
-            row.id,
-            row.display_grade ?? row.displayGrade ?? row.label ?? row.name,
-          );
-          if (directCandidate) {
-            return [directCandidate];
-          }
-          return extractGradeCandidates(row);
-        }
-
-        return [];
-      })
-      .filter((item) => item.displayGrade.trim().length > 0);
-  }
-
-  if (typeof input === "object") {
-    const obj = input as Record<string, unknown>;
-
-    if ("body" in obj) {
-      const nested = extractGradeCandidates(obj.body);
-      if (nested.length > 0) {
-        return nested;
-      }
-    }
-
-    if ("data" in obj) {
-      const nested = extractGradeCandidates(obj.data);
-      if (nested.length > 0) {
-        return nested;
-      }
-    }
-
-    return Object.entries(obj)
-      .flatMap(([key, value]) => {
-        if (key === "code" || key === "status" || key === "message" || key === "error") {
-          return [];
-        }
-
-        if (value && typeof value === "object") {
-          const row = value as Record<string, unknown>;
-          const candidate = toGradeCandidate(
-            row.id ?? key,
-            row.display_grade ?? row.displayGrade ?? row.label ?? row.name,
-          );
-          if (candidate) {
-            return [candidate];
-          }
-
-          const nested = extractGradeCandidates(value);
-          return nested;
-        }
-
-        const candidate = toGradeCandidate(key, value);
-        return candidate ? [candidate] : [];
-      })
-      .filter((item) => item.displayGrade.trim().length > 0);
-  }
-
-  return [];
-}
-
-function normalizeGradeOptions(json: GradesResponse): GradeOption[] {
-  const uniqueById = new Map<number, string>();
-  for (const candidate of extractGradeCandidates(json)) {
-    if (!uniqueById.has(candidate.id)) {
-      uniqueById.set(candidate.id, candidate.displayGrade);
-    }
-  }
-
-  return [...uniqueById.entries()]
-    .map(([id, displayGrade]) => ({ id, displayGrade }))
-    .sort((a, b) => a.id - b.id);
-}
 
 function discordCandidatesFromUser(user: User | null | undefined): DiscordMember[] {
   if (!user) {
@@ -194,87 +84,6 @@ function discordCandidatesFromUser(user: User | null | undefined): DiscordMember
     id: user.id,
     name,
   }));
-}
-
-type SearchableDropdownProps = {
-  label: string;
-  placeholder: string;
-  searchPlaceholder: string;
-  options: Array<{ value: string; label: string }>;
-  value: string;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-};
-
-function SearchableDropdown({
-  label,
-  placeholder,
-  searchPlaceholder,
-  options,
-  value,
-  disabled,
-  onChange,
-}: SearchableDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
-  const selected = useMemo(
-    () => options.find((item) => item.value === value) ?? null,
-    [options, value],
-  );
-
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    if (!keyword) {
-      return options;
-    }
-    return options.filter((item) => item.label.toLowerCase().includes(keyword));
-  }, [options, query]);
-
-  return (
-    <div className="space-y-1">
-      <p className="text-sm font-medium text-slate-700">{label}</p>
-      <div className="relative">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => setOpen((prev) => !prev)}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm disabled:bg-slate-100"
-        >
-          {selected?.label ?? placeholder}
-        </button>
-        {open ? (
-          <div className="absolute z-20 mt-2 w-full rounded-lg border border-slate-300 bg-white p-2 shadow-lg">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="mb-2 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            />
-            <div className="max-h-52 overflow-auto rounded-md border border-slate-200">
-              {filtered.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-slate-500">候補がありません</p>
-              ) : (
-                filtered.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(item.value);
-                      setOpen(false);
-                    }}
-                    className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                  >
-                    {item.label}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 async function parseError(response: Response): Promise<string> {
@@ -371,8 +180,7 @@ export default function EnrollmentPage() {
         return;
       }
 
-      const gradesJson = (await gradesResponse.json()) as GradesResponse;
-      const normalizedGrades = normalizeGradeOptions(gradesJson);
+      const normalizedGrades = normalizeGradeOptions(await gradesResponse.json());
       setGrades(normalizedGrades);
       if (normalizedGrades.length === 0) {
         setWarning("学年候補が0件でした。MemberDBのgradesデータまたはレスポンス形式を確認してください。");

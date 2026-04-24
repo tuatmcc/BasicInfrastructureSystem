@@ -15,11 +15,6 @@ const oauthOptions: OAuthOption[] = [
   { provider: "google", label: "Google" },
   { provider: "github", label: "GitHub" },
   { provider: "discord", label: "Discord" },
-  { provider: "gitlab", label: "GitLab" },
-  { provider: "bitbucket", label: "Bitbucket" },
-  { provider: "azure", label: "Microsoft Azure" },
-  { provider: "twitter", label: "X (Twitter)" },
-  { provider: "notion", label: "Notion" },
 ];
 
 function toAuthErrorMessage(error: { message: string } | null): string {
@@ -47,12 +42,10 @@ export default function AuthEntryPage() {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [magicEmail, setMagicEmail] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
-  const [signupMagicEmail, setSignupMagicEmail] = useState("");
   const [registering, setRegistering] = useState(false);
 
   async function onPasswordLogin(event: FormEvent<HTMLFormElement>) {
@@ -75,30 +68,6 @@ export default function AuthEntryPage() {
     }
 
     router.push("/dashboard");
-  }
-
-  async function onMagicLinkLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoggingIn(true);
-    setAuthError("");
-    setAuthMessage("");
-
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: magicEmail,
-      options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-
-    setLoggingIn(false);
-
-    if (error) {
-      setAuthError(error.message);
-      return;
-    }
-
-    setAuthMessage("Magic Linkを送信しました。メールを確認してください。");
   }
 
   async function onOAuthLogin(provider: Provider) {
@@ -162,31 +131,6 @@ export default function AuthEntryPage() {
     }
 
     router.push("/enrollment");
-  }
-
-  async function onMagicLinkRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setRegistering(true);
-    setAuthError("");
-    setAuthMessage("");
-
-    const supabase = getSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: signupMagicEmail,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/enrollment`,
-      },
-    });
-
-    setRegistering(false);
-
-    if (error) {
-      setAuthError(toAuthErrorMessage(error));
-      return;
-    }
-
-    setAuthMessage("登録用Magic Linkを送信しました。リンクから入部届画面へ進んでください。");
   }
 
   async function onOAuthRegister(provider: Provider) {
@@ -304,25 +248,6 @@ export default function AuthEntryPage() {
                   </button>
                 </form>
 
-                <form className="space-y-3" onSubmit={onMagicLinkLogin}>
-                  <h2 className="text-sm font-semibold text-slate-700">Magic Link</h2>
-                  <input
-                    type="email"
-                    required
-                    value={magicEmail}
-                    onChange={(event) => setMagicEmail(event.target.value)}
-                    placeholder="email@example.com"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={loggingIn}
-                    className="w-full rounded-lg border border-cyan-700 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 disabled:opacity-60"
-                  >
-                    Magic Linkを送信
-                  </button>
-                </form>
-
                 <div>
                   <h2 className="mb-2 text-sm font-semibold text-slate-700">OAuthログイン</h2>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -342,11 +267,11 @@ export default function AuthEntryPage() {
             ) : (
               <div className="space-y-6">
                 <p className="text-sm text-slate-600">
-                  まず登録手段を選択してください。Auth登録完了後、入部届画面へ遷移します。
+                  まず登録手段を選択してください。登録完了後、入部届画面へ遷移します。
                 </p>
 
                 <form className="space-y-3" onSubmit={onPasswordRegister}>
-                  <h2 className="text-sm font-semibold text-slate-700">メールアドレス + パスワードで登録</h2>
+                  <h2 className="text-sm font-semibold text-slate-700">Email + PWで登録</h2>
                   <input
                     type="email"
                     required
@@ -368,25 +293,6 @@ export default function AuthEntryPage() {
                     type="submit"
                     disabled={registering}
                     className="w-full rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60"
-                  >
-                    登録
-                  </button>
-                </form>
-
-                <form className="space-y-3" onSubmit={onMagicLinkRegister}>
-                  <h2 className="text-sm font-semibold text-slate-700">Magic Linkで登録</h2>
-                  <input
-                    type="email"
-                    required
-                    value={signupMagicEmail}
-                    onChange={(event) => setSignupMagicEmail(event.target.value)}
-                    placeholder="email@example.com"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  />
-                  <button
-                    type="submit"
-                    disabled={registering}
-                    className="w-full rounded-lg border border-cyan-700 px-4 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 disabled:opacity-60"
                   >
                     登録
                   </button>
