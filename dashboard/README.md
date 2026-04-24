@@ -1,10 +1,13 @@
 MCC基盤システム向けのDashboardフロントエンドです。
 
 - 認証: Supabase Auth
-- 部員情報: MemberDatabase API (`/api/v0/me`, `/api/v0/members`)
+- 部員情報: MemberDatabase API (`/api/v0/members/me`, `/api/v0/members`)
 - Discord操作: DiscordConnector PublicAPI (`/api/v0/*`)
 
 Dashboardはバックエンドへの直接アクセスではなく、Next.js Route Handler経由で既存APIを呼び出します。
+
+新規Authユーザー作成時は Supabase Trigger が `members/users` の初期データを作成します。
+ログイン後に `needs_enrollment=true` の場合は `/enrollment` へ遷移し、入部届入力後に `/dashboard` へ遷移します。
 
 ## Environment Variables
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 
 type MeBody = {
@@ -18,6 +19,7 @@ type MeBody = {
 type MeResponse = {
   code: number;
   body: MeBody;
+  needs_enrollment?: boolean;
 };
 
 type EditableMeForm = {
@@ -52,6 +54,7 @@ async function readError(response: Response): Promise<string> {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { session, user, isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -89,13 +92,18 @@ export default function DashboardPage() {
       }
 
       const json = (await response.json()) as MeResponse;
+      if (json.needs_enrollment) {
+        router.replace("/enrollment");
+        return;
+      }
+
       setMe(json.body);
       setForm(toEditableForm(json.body));
       setLoading(false);
     }
 
     void loadMe();
-  }, [session?.access_token]);
+  }, [router, session?.access_token]);
 
   const readonlyRows = useMemo(
     () => [

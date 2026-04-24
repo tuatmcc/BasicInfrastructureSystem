@@ -40,21 +40,48 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
     let active = true;
 
-    async function verifyRegistration() {
-      setRegistrationCheckLoading(true);
-
+    async function fetchRegistrationStatus(accessToken: string) {
       const response = await fetch("/api/memberdb/api/v0/members/me", {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
+
+      if (!response.ok) {
+        return { response, needsEnrollment: false };
+      }
+
+      const json = (await response.json()) as { needs_enrollment?: boolean };
+      return { response, needsEnrollment: Boolean(json.needs_enrollment) };
+    }
+
+    async function verifyRegistration() {
+      setRegistrationCheckLoading(true);
+
+      let currentToken = token;
+      let result = await fetchRegistrationStatus(currentToken);
+
+      if (result.response.status === 401 || result.response.status === 404) {
+        const { data, error } = await getSupabaseBrowserClient().auth.refreshSession();
+        if (!error && data.session?.access_token) {
+          currentToken = data.session.access_token;
+          result = await fetchRegistrationStatus(currentToken);
+        }
+      }
 
       if (!active) {
         return;
       }
 
-      if (response.ok) {
+      if (result.response.ok) {
+        if (result.needsEnrollment) {
+          setRegistered(false);
+          setRegistrationCheckLoading(false);
+          router.replace("/enrollment");
+          return;
+        }
+
         setRegistered(true);
         setRegistrationCheckLoading(false);
         return;
@@ -62,7 +89,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       setRegistered(false);
       setRegistrationCheckLoading(false);
-      router.replace("/?registration=required");
+      if (result.response.status === 401 || result.response.status === 404) {
+        router.replace("/enrollment");
+        return;
+      }
+
+      router.replace("/");
     }
 
     void verifyRegistration();

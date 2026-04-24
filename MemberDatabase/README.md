@@ -24,11 +24,13 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 
 ### GET
 - ログイン中のユーザの情報を取得する。
+- `needs_enrollment` が `true` の場合、入部届入力（初期値からの更新）が必要。
 
 #### レスポンス形式
   ```json
   {
   "code" : <HTTPステータスコード> , 
+	"needs_enrollment" : <入部届入力が必要ならtrue> ,
   "body" : {
   	"full_name": <本名> , 
   	"discord_name" : <Discord表示名> , 
@@ -44,36 +46,21 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   ```
 
 ### POST
-- 新規登録時に呼び出すエンドポイント
-
-#### リクエスト形式
-  ```json
-  {
-  "code" : <HTTPステータスコード> , 
-  "body" : {
-  	"full_name": <本名> , 
-  	"discord_name" : <Discord表示名> , 
-  	"grade": <内部で管理している学年番号> , 
-  	"display_grade" : <表示上の学年> , 
-  	"student_id": <学籍番号> , 
-  	"emergency_contact": <緊急連絡先> , 
-  	"student_email" : <学内メアド> ,
-  	"insurance" : <保険加入状況> , 
-  	"some_allergy": <アレルギーの有無>
-  }
-  }
-  ```
+- 新規登録用途のエンドポイント。
+- 内部では Supabase Trigger と同等の DB function（`SECURITY DEFINER`）を呼び出し、
+	`members/users/app_metadata.member_id` の紐付けを保証してから登録情報を保存する。
 
 #### レスポンス形式
   ``` json
   {
-  	"code" : <HTTPステータスコード>
+	"code" : 201
   }
   ```
 
 ### PATCH
 - ログイン中のユーザーの指定した項目を書き換える。
   - `display_name` と `display_grade` はPATCH不可。ステータスコードは必ず `400` 。
+	- `discord_name` は更新可能（`users.display_name` を更新）。
 
 - **Merge Patch** 方式を採用
 

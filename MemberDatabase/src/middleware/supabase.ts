@@ -40,10 +40,17 @@ export const supabaseMiddleware = createMiddleware<Env>(async (c, next) => {
   )
   // ③ 【重要】Supabase APIを叩いて、トークンが本物か・期限切れでないかを確認する
   // ※getUser() はサーバー側でJWTの署名と有効性を検証し、実際のユーザー情報を返します
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { data: { user }, error } = await supabase.auth.getUser(token)
 
   if (error || !user) {
-    return c.json({ error: 'Unauthorized: 無効または期限切れのトークンです' }, 401)
+    const detail = error?.message ?? 'user not found'
+    return c.json(
+      {
+        error: `Unauthorized: 無効または期限切れのトークンです (${detail})`,
+        detail,
+      },
+      401,
+    )
   }
   c.set('user', user)
   c.set('supabase', supabase)

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { User } from "@supabase/supabase-js";
 
 type DiscordMember = {
@@ -40,6 +41,24 @@ const initialForm: EnrollmentForm = {
 type GradesResponse = {
   code: number;
   body?: unknown;
+};
+
+type MeBody = {
+  full_name: string;
+  discord_name: string | null;
+  grade: number;
+  display_grade: string;
+  student_id: string;
+  emergency_contact: string;
+  student_email: string;
+  insurance: boolean;
+  some_allergy: boolean;
+};
+
+type MeResponse = {
+  code: number;
+  body: MeBody;
+  needs_enrollment?: boolean;
 };
 
 type GradeCandidate = {
@@ -309,7 +328,26 @@ export default function EnrollmentPage() {
       }
 
       if (meResponse.ok) {
-        router.replace("/dashboard");
+        const meJson = (await meResponse.json()) as MeResponse;
+
+        if (!meJson.needs_enrollment) {
+          router.replace("/dashboard");
+          return;
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          name: meJson.body.full_name,
+          gradeId: meJson.body.grade > 0 ? String(meJson.body.grade) : "",
+          emergency_call: meJson.body.emergency_contact,
+          student_id: meJson.body.student_id,
+          student_email: meJson.body.student_email,
+          insurance: meJson.body.insurance ? "true" : "false",
+          some_allergy: meJson.body.some_allergy ? "true" : "false",
+          discord_name: meJson.body.discord_name ?? "",
+        }));
+
+        setBooting(false);
         return;
       }
 
@@ -449,6 +487,8 @@ export default function EnrollmentPage() {
       setError(await parseError(response));
       return;
     }
+
+    await getSupabaseBrowserClient().auth.refreshSession();
 
     setMessage("登録が完了しました。ダッシュボードへ移動します。");
     router.push("/dashboard");
