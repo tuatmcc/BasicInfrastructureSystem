@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { DiscordLinkPanel } from "@/components/discord-link-panel";
 import { SearchableDropdown } from "@/components/searchable-dropdown";
 import { normalizeGradeOptions, type GradeOption } from "@/lib/grade-options";
 
 type MeBody = {
   full_name: string;
   discord_name: string | null;
+  discord_id: string | null;
   grade: number;
   display_grade: string;
   student_id: string;
@@ -131,11 +133,12 @@ export default function DashboardPage() {
   const readonlyRows = useMemo(
     () => [
       { label: "Discord表示名", value: me?.discord_name ?? "未設定" },
+      { label: "Discord ID", value: me?.discord_id ?? "未連携" },
       { label: "表示学年", value: me?.display_grade ?? "-" },
       { label: "権限", value: isAdmin ? "管理者" : "一般部員" },
       { label: "ログインメール", value: user?.email ?? "-" },
     ],
-    [isAdmin, me?.discord_name, me?.display_grade, user?.email],
+    [isAdmin, me?.discord_id, me?.discord_name, me?.display_grade, user?.email],
   );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -181,7 +184,7 @@ export default function DashboardPage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h1 className="text-2xl font-bold text-slate-900">マイページ</h1>
         <p className="mt-2 text-sm text-slate-600">
-          部員情報の確認と更新を行います。Discord名と表示学年は読み取り専用です。
+          部員情報の確認と更新を行います。Discord連携はこの画面から更新できます。
         </p>
       </section>
 
@@ -193,6 +196,28 @@ export default function DashboardPage() {
           </div>
         ))}
       </section>
+
+      {session?.access_token && me ? (
+        <DiscordLinkPanel
+          accessToken={session.access_token}
+          currentDiscordId={me.discord_id}
+          currentDiscordName={me.discord_name}
+          title="Discord連携"
+          description="Discordで再認証し、所属サーバーへの参加が確認できたアカウントだけを保存します。"
+          returnTo="/dashboard"
+          onLinked={({ discordId, discordName }) => {
+            setMe((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    discord_id: discordId,
+                    discord_name: discordName,
+                  }
+                : prev,
+            );
+          }}
+        />
+      ) : null}
 
       {error ? (
         <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</p>
@@ -264,23 +289,19 @@ export default function DashboardPage() {
             保険加入
             <select
               value={form.insurance}
-              onChange={(event) =>
-                setForm((prev) => prev && { ...prev, insurance: event.target.value as "true" | "false" })
-              }
+              onChange={(event) => setForm((prev) => prev && { ...prev, insurance: event.target.value as "true" | "false" })}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             >
               <option value="true">あり</option>
               <option value="false">なし</option>
             </select>
           </label>
-          <label className="text-sm text-slate-700 md:col-span-2">
+          <label className="text-sm text-slate-700">
             アレルギー
             <select
               value={form.some_allergy}
               onChange={(event) =>
-                setForm((prev) =>
-                  prev && { ...prev, some_allergy: event.target.value as "true" | "false" },
-                )
+                setForm((prev) => prev && { ...prev, some_allergy: event.target.value as "true" | "false" })
               }
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             >
@@ -291,9 +312,9 @@ export default function DashboardPage() {
           <div className="md:col-span-2">
             <button
               type="submit"
-              className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+              className="rounded-lg bg-cyan-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800"
             >
-              変更を保存
+              更新
             </button>
           </div>
         </form>

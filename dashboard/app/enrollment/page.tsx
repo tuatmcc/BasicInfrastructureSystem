@@ -3,15 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { DiscordLinkPanel } from "@/components/discord-link-panel";
 import { SearchableDropdown } from "@/components/searchable-dropdown";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { normalizeGradeOptions, type GradeOption } from "@/lib/grade-options";
-import type { User } from "@supabase/supabase-js";
-
-type DiscordMember = {
-  id: string;
-  name: string;
-};
 
 type EnrollmentForm = {
   name: string;
@@ -38,6 +33,7 @@ const initialForm: EnrollmentForm = {
 type MeBody = {
   full_name: string;
   discord_name: string | null;
+  discord_id: string | null;
   grade: number;
   display_grade: string;
   student_id: string;
@@ -52,39 +48,6 @@ type MeResponse = {
   body: MeBody;
   needs_enrollment?: boolean;
 };
-
-function discordCandidatesFromUser(user: User | null | undefined): DiscordMember[] {
-  if (!user) {
-    return [];
-  }
-
-  const rawMetadata = user.user_metadata;
-  const metadata =
-    rawMetadata && typeof rawMetadata === "object"
-      ? (rawMetadata as Record<string, unknown>)
-      : undefined;
-
-  const candidateNames = [
-    metadata?.preferred_username,
-    metadata?.user_name,
-    metadata?.name,
-    metadata?.full_name,
-    metadata?.nick_name,
-  ]
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-
-  const uniqueNames = [...new Set(candidateNames)];
-  if (uniqueNames.length === 0) {
-    return [];
-  }
-
-  return uniqueNames.map((name) => ({
-    id: user.id,
-    name,
-  }));
-}
 
 async function parseError(response: Response): Promise<string> {
   try {
@@ -104,9 +67,9 @@ export default function EnrollmentPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
-
   const [grades, setGrades] = useState<GradeOption[]>([]);
-  const [discordMembers, setDiscordMembers] = useState<DiscordMember[]>([]);
+  const [linkedDiscordId, setLinkedDiscordId] = useState<string | null>(null);
+  const [linkedDiscordName, setLinkedDiscordName] = useState<string | null>(null);
   const [form, setForm] = useState<EnrollmentForm>(initialForm);
 
   useEffect(() => {
@@ -115,7 +78,6 @@ export default function EnrollmentPage() {
     }
 
     const token = session?.access_token;
-
     if (!token) {
       router.replace("/");
       return;
@@ -127,6 +89,10 @@ export default function EnrollmentPage() {
       setBooting(true);
       setError("");
       setWarning("");
+
+      let nextForm = initialForm;
+      let nextDiscordId: string | null = null;
+      let nextDiscordName: string | null = null;
 
       const meResponse = await fetch("/api/memberdb/api/v0/members/me", {
         headers: { Authorization: `Bearer ${token}` },
@@ -144,8 +110,7 @@ export default function EnrollmentPage() {
           return;
         }
 
-        setForm((prev) => ({
-          ...prev,
+        nextForm = {
           name: meJson.body.full_name,
           gradeId: meJson.body.grade > 0 ? String(meJson.body.grade) : "",
           emergency_call: meJson.body.emergency_contact,
@@ -154,13 +119,10 @@ export default function EnrollmentPage() {
           insurance: meJson.body.insurance ? "true" : "false",
           some_allergy: meJson.body.some_allergy ? "true" : "false",
           discord_name: meJson.body.discord_name ?? "",
-        }));
-
-        setBooting(false);
-        return;
-      }
-
-      if (meResponse.status !== 401 && meResponse.status !== 404) {
+        };
+        nextDiscordId = meJson.body.discord_id;
+        nextDiscordName = meJson.body.discord_name;
+      } else if (meResponse.status !== 401 && meResponse.status !== 404) {
         setError(`登録状態の確認に失敗しました: ${await parseError(meResponse)}`);
         setBooting(false);
         return;
@@ -182,49 +144,12 @@ export default function EnrollmentPage() {
 
       const normalizedGrades = normalizeGradeOptions(await gradesResponse.json());
       setGrades(normalizedGrades);
+      setForm(nextForm);
+      setLinkedDiscordId(nextDiscordId);
+      setLinkedDiscordName(nextDiscordName);
+
       if (normalizedGrades.length === 0) {
         setWarning("学年候補が0件でした。MemberDBのgradesデータまたはレスポンス形式を確認してください。");
-      }
-
-      const localDiscordCandidates = discordCandidatesFromUser(session?.user);
-      let remoteDiscordCandidates: DiscordMember[] = [];
-
-      try {
-        const discordResponse = await fetch("/api/discord/api/v0/member/list", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (discordResponse.ok) {
-          const discordJson = (await discordResponse.json()) as unknown;
-          if (Array.isArray(discordJson)) {
-            remoteDiscordCandidates = discordJson
-              .map((item) => {
-                if (!item || typeof item !== "object") {
-                  return null;
-                }
-                const row = item as { id?: unknown; name?: unknown };
-                if (typeof row.id !== "string" || typeof row.name !== "string") {
-                  return null;
-                }
-                return { id: row.id, name: row.name };
-              })
-              .filter((item): item is DiscordMember => item !== null);
-          }
-        } else {
-          setWarning(`Discord候補の取得に失敗しました: ${await parseError(discordResponse)}`);
-        }
-      } catch {
-        setWarning("Discord候補の取得に失敗しました。Discord表示名は手入力してください。");
-      }
-
-      const mergedDiscordCandidates = [...remoteDiscordCandidates, ...localDiscordCandidates].filter(
-        (candidate, index, array) =>
-          array.findIndex((item) => item.id === candidate.id && item.name === candidate.name) === index,
-      );
-      setDiscordMembers(mergedDiscordCandidates);
-
-      if (mergedDiscordCandidates.length === 0) {
-        setWarning("Discord候補が見つからなかったため、Discord表示名は手入力してください。");
       }
 
       setBooting(false);
@@ -235,16 +160,11 @@ export default function EnrollmentPage() {
     return () => {
       active = false;
     };
-  }, [loading, router, session?.access_token, session?.user]);
+  }, [loading, router, session?.access_token]);
 
   const gradeDropdownOptions = useMemo(
     () => grades.map((item) => ({ value: String(item.id), label: item.displayGrade })),
     [grades],
-  );
-
-  const discordDropdownOptions = useMemo(
-    () => discordMembers.map((item) => ({ value: item.name, label: `${item.name} (${item.id})` })),
-    [discordMembers],
   );
 
   const canSubmit = useMemo(() => {
@@ -257,10 +177,11 @@ export default function EnrollmentPage() {
       emailPattern.test(form.student_email.trim()) &&
       form.insurance !== "" &&
       form.some_allergy !== "" &&
-      form.discord_name.trim().length > 0 &&
+      typeof linkedDiscordId === "string" &&
+      /^\d+$/.test(linkedDiscordId) &&
       !submitting
     );
-  }, [form, submitting]);
+  }, [form, linkedDiscordId, submitting]);
 
   async function onSubmit() {
     if (!session?.access_token || !canSubmit) {
@@ -279,13 +200,13 @@ export default function EnrollmentPage() {
       },
       body: JSON.stringify({
         full_name: form.name,
-        discord_name: form.discord_name,
         grade: Number(form.gradeId),
         student_id: form.student_id,
         emergency_contact: form.emergency_call,
         student_email: form.student_email,
         insurance: form.insurance === "true",
         some_allergy: form.some_allergy === "true",
+        ...(form.discord_name.trim().length > 0 ? { discord_name: form.discord_name.trim() } : {}),
       }),
     });
 
@@ -307,7 +228,7 @@ export default function EnrollmentPage() {
       <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-xl md:p-8">
         <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">入部届画面</h1>
         <p className="mt-2 text-sm text-slate-600">
-          必須項目を入力し、MemberDatabaseへの登録を完了してください。
+          必須項目の入力と Discord 連携を完了してから登録してください。
         </p>
 
         {booting ? <p className="mt-6 text-sm text-slate-700">初期データを読み込み中です...</p> : null}
@@ -368,9 +289,7 @@ export default function EnrollmentPage() {
               <input
                 type="text"
                 value={form.student_id}
-                onChange={(event) =>
-                  setForm((prev) => ({ ...prev, student_id: event.target.value }))
-                }
+                onChange={(event) => setForm((prev) => ({ ...prev, student_id: event.target.value }))}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </label>
@@ -424,36 +343,30 @@ export default function EnrollmentPage() {
             </label>
 
             <div className="md:col-span-2">
-              {discordDropdownOptions.length > 0 ? (
-                <SearchableDropdown
-                  label="Discord表示名"
-                  placeholder="Discord表示名を選択"
-                  searchPlaceholder="Discord表示名で検索"
-                  options={discordDropdownOptions}
-                  value={form.discord_name}
-                  onChange={(value) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      discord_name: value,
-                    }));
-                  }}
-                />
-              ) : (
-                <label className="text-sm text-slate-700">
-                  Discord表示名
-                  <input
-                    type="text"
-                    value={form.discord_name}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, discord_name: event.target.value }))
-                    }
-                    placeholder="Discord表示名を入力"
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  />
-                </label>
-              )}
+              <DiscordLinkPanel
+                accessToken={session?.access_token ?? ""}
+                currentDiscordId={linkedDiscordId}
+                currentDiscordName={linkedDiscordName}
+                title="Discord連携"
+                description="Discordでサインインし、組織サーバー参加済みのアカウントだけを登録します。"
+                returnTo="/enrollment"
+                onLinked={({ discordId, discordName }) => {
+                  setLinkedDiscordId(discordId);
+                  setLinkedDiscordName(discordName);
+                  setForm((prev) => ({
+                    ...prev,
+                    discord_name: discordName ?? prev.discord_name,
+                  }));
+                }}
+              />
             </div>
           </div>
+        ) : null}
+
+        {!linkedDiscordId && !booting ? (
+          <p className="mt-6 text-sm text-slate-600">
+            登録ボタンは、Discord連携が完了するまで有効になりません。
+          </p>
         ) : null}
 
         <div className="mt-8">

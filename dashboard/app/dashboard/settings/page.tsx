@@ -20,6 +20,18 @@ export default function SettingsPage() {
       key: "DISCORD_API_BASE_URL",
       value: process.env.NEXT_PUBLIC_DISCORD_API_BASE_URL ?? "サーバ側環境変数を使用",
     },
+    {
+      key: "DISCORD_OAUTH_CLIENT_ID",
+      value: process.env.NEXT_PUBLIC_DISCORD_OAUTH_CLIENT_ID ?? "サーバ側環境変数を使用",
+    },
+    {
+      key: "DISCORD_OAUTH_CLIENT_SECRET",
+      value: "サーバ側環境変数を使用",
+    },
+    {
+      key: "DISCORD_OAUTH_STATE_SECRET",
+      value: "サーバ側環境変数を使用",
+    },
   ];
 
   return (
