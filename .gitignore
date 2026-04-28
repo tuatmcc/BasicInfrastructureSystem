@@ -221,3 +221,6 @@ supabase/seed.sql
 
 # Node.js
 node_modules
+
+# MacOS
+.DS_Store
