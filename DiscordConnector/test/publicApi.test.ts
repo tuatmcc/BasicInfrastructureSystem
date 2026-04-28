@@ -43,6 +43,7 @@ describe("PublicAPI", () => {
         version: "0.1.0",
       },
     });
+    expect(document.paths["/api/v0/member/exists"]).toBeDefined();
     expect(document.paths["/api/v0/role/list"]).toBeDefined();
     expect(document.components.securitySchemes.BearerAuth).toMatchObject({
       type: "http",
