@@ -47,6 +47,13 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 - `/` : ログイン / 新規登録
 - `/dashboard` : マイページ
+- `/dashboard/admin` : 管理者コンソール
 - `/dashboard/members` : 部員管理 (管理者)
 - `/dashboard/discord` : Discord管理 (管理者)
 - `/dashboard/settings` : 設定 (管理者)
+
+## 権限管理
+
+- 管理者判定は Dashboard の route handler が Supabase Auth に問い合わせて行います。
+- MemberDB の管理系 API は `app_metadata.role` が `admin` のユーザーのみ通過します。
+- Supabase Dashboard の SQL Editor か Admin API で、対象ユーザーの `app_metadata.role` を `admin` に設定してください。

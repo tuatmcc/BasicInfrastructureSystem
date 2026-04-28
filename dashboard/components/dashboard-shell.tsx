@@ -14,6 +14,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "ダッシュボード" },
+  { href: "/dashboard/admin", label: "管理者コンソール", adminOnly: true },
   { href: "/dashboard/members", label: "部員管理", adminOnly: true },
   { href: "/dashboard/discord", label: "Discord管理", adminOnly: true },
   { href: "/dashboard/settings", label: "設定", adminOnly: true },

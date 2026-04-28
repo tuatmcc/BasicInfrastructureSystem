@@ -10,19 +10,32 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { isAdminUser } from "@/lib/auth";
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  roles: string[];
+};
+
+type SessionRoleResponse = {
+  code: number;
+  body?: {
+    user_id: string;
+    email: string | null;
+    roles: string[];
+    is_admin: boolean;
+  };
+  message?: string;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,19 +43,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let active = true;
 
+    async function syncSession(currentSession: Session | null) {
+      setSession(currentSession);
+
+      if (!currentSession?.access_token) {
+        if (active) {
+          setRoles([]);
+          setIsAdmin(false);
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch("/api/auth/session", {
+          headers: {
+            Authorization: `Bearer ${currentSession.access_token}`,
+          },
+          cache: "no-store",
+        });
+
+        if (!active) {
+          return;
+        }
+
+        if (!response.ok) {
+          setRoles([]);
+          setIsAdmin(false);
+          setLoading(false);
+          return;
+        }
+
+        const json = (await response.json()) as SessionRoleResponse;
+        setRoles(json.body?.roles ?? []);
+        setIsAdmin(json.body?.is_admin === true);
+      } catch {
+        if (active) {
+          setRoles([]);
+          setIsAdmin(false);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) {
         return;
       }
-      setSession(data.session ?? null);
-      setLoading(false);
+      void syncSession(data.session ?? null);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession ?? null);
-      setLoading(false);
+      void syncSession(currentSession ?? null);
     });
 
     return () => {
@@ -56,9 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       loading,
-      isAdmin: isAdminUser(session?.user ?? null),
+      isAdmin,
+      roles,
     }),
-    [loading, session],
+    [isAdmin, loading, roles, session],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
