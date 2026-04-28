@@ -1,23 +1,9 @@
 import { Hono } from 'hono'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Bindings, Variables } from '../type'
+import { getUserRoles, hasAdminRole } from '../auth'
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
-
-const hasAdminRole = (user: Variables['user']): boolean => {
-	const appMetadata = user.app_metadata as Record<string, unknown> | undefined
-	const roles = appMetadata?.roles
-
-	if (Array.isArray(roles)) {
-		return roles.some((role) => role === 'Admin')
-	}
-
-	if (typeof roles === 'string') {
-		return roles === 'Admin'
-	}
-
-	return false
-}
 
 const parseBooleanQuery = (value: string | undefined): boolean | null => {
 	if (value === undefined) {
@@ -39,7 +25,7 @@ app.get('/', async (c) => {
 	const supabase = c.get('supabase') as SupabaseClient
 	const user = c.get('user')
 
-	if (!hasAdminRole(user)) {
+	if (!hasAdminRole(getUserRoles(user))) {
 		return c.json({ code: 403, message: 'Forbidden' }, 403)
 	}
 

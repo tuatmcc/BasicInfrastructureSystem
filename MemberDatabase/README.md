@@ -132,6 +132,22 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   }
   ```
 
+## 管理者ロールの付与
+
+- MemberDB の管理者判定は Supabase Auth の `app_metadata.role` を見ます。
+- `app_metadata.role` が文字列で `admin` の場合のみ管理者として扱います。
+- 例:
+
+```sql
+update auth.users
+set raw_app_meta_data =
+	coalesce(raw_app_meta_data, '{}'::jsonb)
+	|| '{"role":"admin"}'::jsonb
+where email = 'admin@example.com';
+```
+
+- 権限を変更したら、対象ユーザーは一度ログアウトして再ログインしてください。JWT の更新時に新しいロールが反映されます。
+
 
 
 <!-- ## `api/v0/me/fullname`
