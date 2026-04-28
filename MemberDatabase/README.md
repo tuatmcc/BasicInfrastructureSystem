@@ -34,6 +34,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   "body" : {
   	"full_name": <本名> , 
   	"discord_name" : <Discord表示名> , 
+  	"discord_id" : <DiscordユーザーID> ,
   	"grade": <内部で管理している学年番号> , 
   	"display_grade" : <表示上の学年> , 
   	"student_id": <学籍番号> , 
@@ -49,6 +50,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 - 新規登録用途のエンドポイント。
 - 内部では Supabase Trigger と同等の DB function（`SECURITY DEFINER`）を呼び出し、
 	`members/users/app_metadata.member_id` の紐付けを保証してから登録情報を保存する。
+- Discord連携は別エンドポイントで事前に保存する想定。`discord_name` は任意で送れる。
 
 #### レスポンス形式
   ``` json
@@ -78,6 +80,32 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
   }
   ```
 
+## `api/v0/discord-link`
+- ログイン中のユーザーなら誰でも実行可能
+
+### POST
+- ログイン中のユーザーの `public.users.discord_id` を更新する。
+- Discord OAuth で取得したユーザーIDを保存する用途。
+
+#### リクエスト形式
+  ``` json
+  {
+  	"discord_id" : <DiscordユーザーID>,
+  	"discord_name" : <Discord表示名>
+  }
+  ```
+
+#### レスポンス形式
+  ``` json
+  {
+  	"code" : 200,
+  	"body" : {
+  		"discord_id" : <DiscordユーザーID>,
+  		"discord_name" : <Discord表示名>
+  	}
+  }
+  ```
+
 ## `api/v0/grades`
 - ログイン中のユーザーなら誰でも実行可能 (NOTE: これはセキュリティ上のリスクがあるため、より良い方法がある場合にはそれを提案してください)
 
@@ -93,8 +121,6 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 	]
   }
   ```
-
-
 
 ## `api/v0/members?` 
 - 管理者のみ実行可能
