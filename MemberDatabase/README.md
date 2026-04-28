@@ -176,3 +176,8 @@ where email = 'admin@example.com';
 ## `api/v0/me/some-allergy`
 - GET: ログイン中のユーザーのアレルギー有無(`members.some_allergy`)を取得する
 - PATCH: ログイン中のユーザーのアレルギー有無を編集する(`members.some_allergy`)を編集する -->
+
+# 使い方
+- `dev.vars`に環境変数を設定(例は`.dev.vars.example`に記載)
+- `npm install` 
+- `npm run dev`
