@@ -115,8 +115,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const saveLinkResponse = await fetch(buildApiUrl(memberDbApiBaseUrl, "api/v0/discord-link"), {
-    method: "POST",
+  const saveLinkResponse = await fetch(buildApiUrl(memberDbApiBaseUrl, "api/v0/members/me"), {
+    method: "PATCH",
     headers: {
       authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",

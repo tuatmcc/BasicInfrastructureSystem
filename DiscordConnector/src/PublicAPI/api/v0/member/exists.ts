@@ -6,7 +6,7 @@ import {
   jsonContent,
   memberIdQuerySchema,
   SnowflakeSchema,
-  requireRoleMiddleware,
+  requireAuthenticatedMiddleware,
   type AppEnv,
 } from "../../../shared";
 
@@ -23,7 +23,7 @@ export function registerMemberExistsRoute(app: OpenAPIHono<AppEnv>): void {
       method: "get",
       path: "/api/v0/member/exists",
       security: bearerSecurity,
-      middleware: requireRoleMiddleware("viewer"),
+      middleware: requireAuthenticatedMiddleware(),
       request: {
         query: memberIdQuerySchema,
       },

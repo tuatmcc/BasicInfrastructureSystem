@@ -58,6 +58,13 @@ async function parseError(response: Response): Promise<string> {
   }
 }
 
+async function fetchMe(accessToken: string): Promise<Response> {
+  return fetch("/api/memberdb/api/v0/members/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+}
+
 export default function EnrollmentPage() {
   const router = useRouter();
   const { session, loading } = useAuth();
@@ -94,9 +101,7 @@ export default function EnrollmentPage() {
       let nextDiscordId: string | null = null;
       let nextDiscordName: string | null = null;
 
-      const meResponse = await fetch("/api/memberdb/api/v0/members/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const meResponse = await fetchMe(token);
 
       if (!active) {
         return;
@@ -130,6 +135,7 @@ export default function EnrollmentPage() {
 
       const gradesResponse = await fetch("/api/memberdb/api/v0/grades", {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
 
       if (!active) {
@@ -206,6 +212,7 @@ export default function EnrollmentPage() {
         student_email: form.student_email,
         insurance: form.insurance === "true",
         some_allergy: form.some_allergy === "true",
+        ...(linkedDiscordId ? { discord_id: linkedDiscordId } : {}),
         ...(form.discord_name.trim().length > 0 ? { discord_name: form.discord_name.trim() } : {}),
       }),
     });
@@ -217,7 +224,25 @@ export default function EnrollmentPage() {
       return;
     }
 
-    await getSupabaseBrowserClient().auth.refreshSession();
+    const { data, error: refreshError } = await getSupabaseBrowserClient().auth.refreshSession();
+    const refreshedToken = data.session?.access_token ?? session.access_token;
+
+    if (refreshError || !refreshedToken) {
+      setError("登録後のセッション更新に失敗しました。再度ログイン状態を確認してください。");
+      return;
+    }
+
+    const meResponse = await fetchMe(refreshedToken);
+    if (!meResponse.ok) {
+      setError(`登録後の状態確認に失敗しました: ${await parseError(meResponse)}`);
+      return;
+    }
+
+    const meJson = (await meResponse.json()) as MeResponse;
+    if (meJson.needs_enrollment) {
+      setError("登録内容の反映を確認できませんでした。少し待ってから再度お試しください。");
+      return;
+    }
 
     setMessage("登録が完了しました。ダッシュボードへ移動します。");
     router.push("/dashboard");

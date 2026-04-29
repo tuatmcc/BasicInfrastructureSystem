@@ -33,6 +33,10 @@ export async function requireRole(request: Request, env: Env, requiredRole: Disc
   return principal;
 }
 
+export async function requireAuthenticatedUser(request: Request, env: Env): Promise<AuthPrincipal> {
+  return getCurrentPrincipal(request, env);
+}
+
 async function getCurrentPrincipal(request: Request, env: Env): Promise<AuthPrincipal> {
   const authorization = request.headers.get("Authorization");
   if (authorization === null) {

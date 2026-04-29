@@ -47,6 +47,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
+        cache: "no-store",
       });
 
       if (!response.ok) {

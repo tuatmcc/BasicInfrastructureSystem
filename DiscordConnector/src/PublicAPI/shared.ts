@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import type { MiddlewareHandler } from "hono";
 import { createServices, type Services } from "../ControlInterface";
-import { requireRole } from "./auth";
+import { requireAuthenticatedUser, requireRole } from "./auth";
 
 export type AppEnv = { Bindings: Env };
 
@@ -199,6 +199,13 @@ export function commonErrorResponses() {
 export function requireRoleMiddleware(role: "viewer" | "operator" | "admin"): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     await requireRole(c.req.raw, c.env, role);
+    await next();
+  };
+}
+
+export function requireAuthenticatedMiddleware(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    await requireAuthenticatedUser(c.req.raw, c.env);
     await next();
   };
 }

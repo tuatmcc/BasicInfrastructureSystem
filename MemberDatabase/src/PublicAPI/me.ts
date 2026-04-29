@@ -13,6 +13,7 @@ type PatchBody = Partial<{
 	student_email: string
 	insurance: boolean
 	some_allergy: boolean
+	discord_id: string
 	discord_name: string
 	display_name: string
 	display_grade: string
@@ -33,6 +34,7 @@ type MeBody = {
 
 type RegistrationBody = {
 	full_name: string
+	discord_id?: string
 	discord_name?: string
 	grade: number
 	student_id: string
@@ -56,6 +58,26 @@ const ALLOWED_PATCH_KEY_TO_COLUMN: Record<string, string> = {
 
 const isBlank = (value: string): boolean => value.trim().length === 0
 const isSnowflake = (value: string): boolean => /^\d+$/.test(value.trim())
+
+const saveDiscordLink = async (
+	supabaseClient: SupabaseClient,
+	discordId: string,
+	discordName?: string,
+): Promise<{ message: string | null; status: number }> => {
+	const { error } = await supabaseClient.rpc('save_current_user_discord_link', {
+		p_discord_id: discordId,
+		p_display_name: discordName ?? null,
+	})
+
+	if (!error) {
+		return { message: null, status: 200 }
+	}
+
+	return {
+		message: error.message,
+		status: error.code === '23505' ? 409 : 500,
+	}
+}
 
 const needsEnrollment = (body: MeBody): boolean => {
 	if (isBlank(body.full_name)) {
@@ -151,6 +173,10 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'Invalid boolean fields' }, 400)
 	}
 
+	if (body.discord_id !== undefined && (typeof body.discord_id !== 'string' || !isSnowflake(body.discord_id))) {
+		return c.json({ code: 400, message: 'Invalid field: discord_id' }, 400)
+	}
+
 	if (body.discord_name !== undefined && typeof body.discord_name !== 'string') {
 		return c.json({ code: 400, message: 'Invalid field: discord_name' }, 400)
 	}
@@ -172,6 +198,13 @@ app.post('/', async (c) => {
 
 	if (typeof data !== 'string' || data.trim().length === 0) {
 		return c.json({ code: 401, message: 'member seed failed' }, 401)
+	}
+
+	if (body.discord_id !== undefined) {
+		const discordLinkResult = await saveDiscordLink(supabase, body.discord_id, body.discord_name)
+		if (discordLinkResult.message) {
+			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
+		}
 	}
 
 	return c.json({ code: 201 }, 201)
@@ -285,6 +318,13 @@ app.patch('/', async (c) => {
 			continue
 		}
 
+		if (key === 'discord_id') {
+			if (typeof patchBody.discord_id !== 'string' || !isSnowflake(patchBody.discord_id)) {
+				return c.json({ code: 400, message: 'discord_id must be a numeric Discord snowflake' }, 400)
+			}
+			continue
+		}
+
 		const column = ALLOWED_PATCH_KEY_TO_COLUMN[key]
 		if (!column) {
 			return c.json({ code: 400, message: 'Unsupported patch field: ' + key }, 400)
@@ -308,6 +348,13 @@ app.patch('/', async (c) => {
 
 	if (typeof patchData !== 'string' || patchData.trim().length === 0) {
 		return c.json({ code: 401, message: 'member patch failed' }, 401)
+	}
+
+	if (patchBody.discord_id !== undefined) {
+		const discordLinkResult = await saveDiscordLink(supabase, patchBody.discord_id, patchBody.discord_name)
+		if (discordLinkResult.message) {
+			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
+		}
 	}
 
 	return c.json({ code: 200 }, 200)

@@ -96,6 +96,7 @@ async function proxyToMemberDb(request: NextRequest, path: string[]) {
   if (responseContentType) {
     responseHeaders.set("content-type", responseContentType);
   }
+  responseHeaders.set("cache-control", "no-store");
 
   return new Response(responseBody, {
     status: response.status,

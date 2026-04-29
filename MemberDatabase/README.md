@@ -49,7 +49,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 ### POST
 - 新規登録用途のエンドポイント。
 - 内部では Supabase Trigger と同等の DB function（`SECURITY DEFINER`）を呼び出し、
-	`members/users/app_metadata.member_id` の紐付けを保証してから登録情報を保存する。
+	`members` と `users` の紐付けを保証してから登録情報を保存する。
 - Discord連携は別エンドポイントで事前に保存する想定。`discord_name` は任意で送れる。
 
 #### レスポンス形式
@@ -61,6 +61,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>()
 
 ### PATCH
 - ログイン中のユーザーの指定した項目を書き換える。
+  - `public.members` の `member_id = ログイン中ユーザーの member_id` に一致する行を直接更新する。
   - `display_name` と `display_grade` はPATCH不可。ステータスコードは必ず `400` 。
 	- `discord_name` は更新可能（`users.display_name` を更新）。
 

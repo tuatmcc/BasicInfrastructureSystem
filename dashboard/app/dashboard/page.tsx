@@ -84,6 +84,7 @@ export default function DashboardPage() {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
+        cache: "no-store",
       });
 
       if (response.status === 404) {
@@ -108,6 +109,7 @@ export default function DashboardPage() {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
+        cache: "no-store",
       });
 
       if (!gradesResponse.ok) {
