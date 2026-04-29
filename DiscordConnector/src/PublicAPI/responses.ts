@@ -1,4 +1,15 @@
-import type { CategoryData, ChannelData, MemberData, MessageData, ReactionData, RoleData } from "../types";
+import type {
+  CategoryData,
+  ChannelData,
+  DbCategory,
+  DbChannel,
+  DbRole,
+  DbUser,
+  MemberData,
+  MessageData,
+  ReactionData,
+  RoleData,
+} from "../types";
 
 export function roleResponse(role: RoleData) {
   return {
@@ -48,5 +59,40 @@ export function reactionResponse(reaction: ReactionData) {
     member_ids: reaction.memberIds,
     me: reaction.me,
     message_id: reaction.messageId,
+  };
+}
+
+export function dbUserResponse(user: DbUser) {
+  return {
+    discord_user_id: user.discordUserId,
+    display_name: user.displayName,
+    member_id: user.memberId,
+    role_ids: user.roleIds,
+  };
+}
+
+export function dbRoleResponse(role: DbRole) {
+  return {
+    role_id: role.roleId,
+    role_name: role.roleName,
+    permissions: role.permissions,
+  };
+}
+
+export function dbChannelResponse(channel: DbChannel) {
+  return {
+    channel_id: channel.channelId,
+    channel_name: channel.channelName,
+    category_id: channel.categoryId,
+    role_ids: channel.roleIds,
+  };
+}
+
+export function dbCategoryResponse(category: DbCategory) {
+  return {
+    category_id: category.categoryId,
+    category_name: category.categoryName,
+    channels: category.channels.map(dbChannelResponse),
+    role_ids: category.roleIds,
   };
 }

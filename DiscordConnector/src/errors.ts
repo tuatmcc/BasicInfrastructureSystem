@@ -6,6 +6,10 @@ export class AuthorizationError extends Error {
   readonly name: string = "AuthorizationError";
 }
 
+export class NotFoundError extends Error {
+  readonly name: string = "NotFoundError";
+}
+
 export class ValidationError extends Error {
   readonly name: string = "ValidationError";
 

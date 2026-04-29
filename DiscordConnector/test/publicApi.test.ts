@@ -20,6 +20,15 @@ describe("PublicAPI", () => {
     await expect(response.json()).resolves.toEqual({ detail: "Authorization header is required" });
   });
 
+  it("requires authorization on dedicated DB and Discord endpoints", async () => {
+    const app = createApp();
+    const dbResponse = await app.request("/api/v0/db/role/list", {}, env);
+    const discordResponse = await app.request("/api/v0/discord/role/list", {}, env);
+
+    expect(dbResponse.status).toBe(401);
+    expect(discordResponse.status).toBe(401);
+  });
+
   it("serves Swagger UI without authorization", async () => {
     const response = await createApp().request("/docs", {}, env);
     expect(response.status).toBe(200);
@@ -45,6 +54,10 @@ describe("PublicAPI", () => {
     });
     expect(document.paths["/api/v0/member/exists"]).toBeDefined();
     expect(document.paths["/api/v0/role/list"]).toBeDefined();
+    expect(document.paths["/api/v0/db/role/list"]).toBeDefined();
+    expect(document.paths["/api/v0/db/user/sync-roles"]).toBeDefined();
+    expect(document.paths["/api/v0/discord/role/list"]).toBeDefined();
+    expect(document.paths["/api/v0/discord/message/reaction/totalling"]).toBeDefined();
     expect(document.components.securitySchemes.BearerAuth).toMatchObject({
       type: "http",
       scheme: "bearer",

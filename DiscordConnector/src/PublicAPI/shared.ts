@@ -91,6 +91,41 @@ export const ReactionSchema = z
   })
   .openapi("Reaction");
 
+export const DbRoleSchema = z
+  .object({
+    role_id: SnowflakeSchema,
+    role_name: z.string().openapi({ example: "admin" }),
+    permissions: z.number().int().openapi({ example: 0 }),
+  })
+  .openapi("DbRole");
+
+export const DbChannelSchema = z
+  .object({
+    channel_id: SnowflakeSchema,
+    channel_name: z.string().openapi({ example: "general" }),
+    category_id: SnowflakeSchema,
+    role_ids: z.array(SnowflakeSchema),
+  })
+  .openapi("DbChannel");
+
+export const DbCategorySchema = z
+  .object({
+    category_id: SnowflakeSchema,
+    category_name: z.string().openapi({ example: "information" }),
+    channels: z.array(DbChannelSchema),
+    role_ids: z.array(SnowflakeSchema),
+  })
+  .openapi("DbCategory");
+
+export const DbUserSchema = z
+  .object({
+    discord_user_id: SnowflakeSchema,
+    display_name: z.string().openapi({ example: "member-name" }),
+    member_id: z.string().nullable().openapi({ example: "member-001" }),
+    role_ids: z.array(SnowflakeSchema),
+  })
+  .openapi("DbUser");
+
 export const createRoleBodySchema = z.object({
   name: z.string(),
   color: RgbColorSchema.nullable().optional(),
@@ -131,6 +166,33 @@ export const roleIdQuerySchema = z.object({
   }),
 });
 
+export const discordUserIdQuerySchema = z.object({
+  discord_user_id: SnowflakeSchema.openapi({
+    param: {
+      name: "discord_user_id",
+      in: "query",
+    },
+  }),
+});
+
+export const optionalMemberIdQuerySchema = z.object({
+  member_id: z.string().optional().openapi({
+    param: {
+      name: "member_id",
+      in: "query",
+    },
+  }),
+});
+
+export const categoryIdQuerySchema = z.object({
+  category_id: SnowflakeSchema.openapi({
+    param: {
+      name: "category_id",
+      in: "query",
+    },
+  }),
+});
+
 export const channelIdQuerySchema = z.object({
   channel_id: SnowflakeSchema.openapi({
     param: {
@@ -147,6 +209,67 @@ export const memberIdQuerySchema = z.object({
       in: "query",
     },
   }),
+});
+
+export const dbUserBodySchema = z.object({
+  discord_user_id: SnowflakeSchema,
+  display_name: z.string(),
+  member_id: z.string().nullable().optional(),
+});
+
+export const dbUserDeleteBodySchema = z.object({
+  discord_user_id: SnowflakeSchema,
+});
+
+export const dbUserSyncRolesBodySchema = z.object({
+  discord_user_id: SnowflakeSchema,
+  role_ids: z.array(SnowflakeSchema),
+});
+
+export const dbRoleBodySchema = z.object({
+  role_id: SnowflakeSchema,
+  role_name: z.string(),
+  permissions: z.number().int(),
+});
+
+export const dbRoleUpdateBodySchema = z.object({
+  role_id: SnowflakeSchema,
+  role_name: z.string().nullable().optional(),
+  permissions: z.number().int().nullable().optional(),
+});
+
+export const dbRoleDeleteBodySchema = z.object({
+  role_id: SnowflakeSchema,
+});
+
+export const dbCategoryBodySchema = z.object({
+  category_id: SnowflakeSchema,
+  category_name: z.string(),
+});
+
+export const dbCategoryDeleteBodySchema = z.object({
+  category_id: SnowflakeSchema,
+});
+
+export const dbCategorySyncPermissionsBodySchema = z.object({
+  category_id: SnowflakeSchema,
+  role_ids: z.array(SnowflakeSchema),
+});
+
+export const dbChannelBodySchema = z.object({
+  channel_id: SnowflakeSchema,
+  channel_name: z.string(),
+  category_id: SnowflakeSchema,
+  role_ids: z.array(SnowflakeSchema).nullable().optional(),
+});
+
+export const dbChannelDeleteBodySchema = z.object({
+  channel_id: SnowflakeSchema,
+});
+
+export const dbChannelSyncPermissionsBodySchema = z.object({
+  channel_id: SnowflakeSchema,
+  role_ids: z.array(SnowflakeSchema),
 });
 
 export const reactionTotallingQuerySchema = z.object({
@@ -191,6 +314,8 @@ export function commonErrorResponses() {
   return {
     401: jsonContent(ErrorSchema, "Authentication error"),
     403: jsonContent(ErrorSchema, "Authorization error"),
+    404: jsonContent(ErrorSchema, "Not found error"),
+    409: jsonContent(ErrorSchema, "Conflict error"),
     422: jsonContent(ErrorSchema, "Validation error"),
     500: jsonContent(ErrorSchema, "Internal server error"),
   };

@@ -4,8 +4,10 @@ import { registerV0Routes } from "./api/v0";
 import {
   AuthenticationError,
   AuthorizationError,
+  DatabaseError,
   DiscordConnectionError,
   DiscordError,
+  NotFoundError,
   ValidationError,
 } from "../errors";
 import { HealthSchema, jsonContent, type AppEnv } from "./shared";
@@ -37,6 +39,9 @@ export function createApp(): OpenAPIHono<AppEnv> {
     if (error instanceof AuthorizationError) {
       return c.json({ detail: error.message }, 403);
     }
+    if (error instanceof NotFoundError) {
+      return c.json({ detail: error.message }, 404);
+    }
     if (error instanceof ValidationError) {
       return c.json({ detail: error.issues }, 422);
     }
@@ -45,6 +50,9 @@ export function createApp(): OpenAPIHono<AppEnv> {
     }
     if (error instanceof DiscordError) {
       return c.json({ detail: error.message }, statusCodeForDiscordError(error));
+    }
+    if (error instanceof DatabaseError) {
+      return c.json({ detail: error.message }, statusCodeForDatabaseError(error));
     }
     console.error("Unhandled request failure", error);
     return c.json({ detail: "Internal Server Error" }, 500);
@@ -80,6 +88,10 @@ export function createApp(): OpenAPIHono<AppEnv> {
   app.get("/docs", swaggerUI({ url: "/openapi.json" }));
 
   return app;
+}
+
+function statusCodeForDatabaseError(error: DatabaseError): 400 | 409 {
+  return error.message.toLowerCase().includes("already exists") ? 409 : 400;
 }
 
 function statusCodeForDiscordError(error: DiscordError): 400 | 403 | 404 | 502 {
