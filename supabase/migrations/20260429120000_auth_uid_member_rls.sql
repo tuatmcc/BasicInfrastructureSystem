@@ -1,5 +1,4 @@
 -- Move MemberDatabase ownership checks to public.members.auth_user_id.
--- Existing data migration/backfill is intentionally out of scope.
 
 drop trigger if exists on_auth_user_created_create_member on auth.users;
 
@@ -14,17 +13,51 @@ drop function if exists public.ensure_current_user_member_seed();
 drop function if exists public.ensure_member_seed_for_auth_user(uuid);
 drop function if exists public.upsert_user_auth_link(uuid, uuid, text);
 
-alter table public.members
-  add column auth_user_id uuid not null references auth.users(id);
-
-create unique index members_auth_user_id_uidx
-  on public.members (auth_user_id);
-
 alter table public.users
   add column if not exists auth_user_id uuid references auth.users(id),
   add column if not exists discord_id text,
   add column if not exists display_name text not null default '',
   add column if not exists member_id uuid references public.members(member_id);
+
+alter table public.members
+  add column if not exists auth_user_id uuid references auth.users(id);
+
+update public.members as members
+set auth_user_id = users.auth_user_id
+from public.users as users
+where members.auth_user_id is null
+  and users.auth_user_id is not null
+  and users.member_id = members.member_id;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.members
+    where auth_user_id is null
+  ) then
+    raise exception 'public.members.auth_user_id backfill failed: member rows without users.auth_user_id linkage remain';
+  end if;
+end;
+$$;
+
+alter table public.members
+  alter column auth_user_id set not null;
+
+create unique index if not exists members_auth_user_id_uidx
+  on public.members (auth_user_id);
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.users
+    where auth_user_id is null
+  ) then
+    raise exception 'public.users.auth_user_id contains null rows';
+  end if;
+end;
+$$;
 
 alter table public.users
   alter column auth_user_id set not null;

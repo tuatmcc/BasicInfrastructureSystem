@@ -162,34 +162,52 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'Invalid field: discord_name' }, 400)
 	}
 
-	const { data, error } = await supabase
-		.from('members')
-		.insert({
-			auth_user_id: user.id,
-			name: body.full_name,
-			grade: body.grade,
-			student_id: body.student_id,
-			emergency_contact: body.emergency_contact,
-			student_email: body.student_email,
-			insurance: body.insurance,
-			some_allergy: body.some_allergy,
-		})
-		.select('member_id')
-		.single()
-
-	if (error) {
-		const status = isUniqueViolation(error) ? 409 : 500
-		return c.json({ code: status, message: error.message }, status)
+	const memberFields = {
+		name: body.full_name,
+		grade: body.grade,
+		student_id: body.student_id,
+		emergency_contact: body.emergency_contact,
+		student_email: body.student_email,
+		insurance: body.insurance,
+		some_allergy: body.some_allergy,
 	}
 
-	const memberId = typeof data?.member_id === 'string' ? data.member_id : null
+	const { data: updatedMember, error: updateError } = await supabase
+		.from('members')
+		.update(memberFields)
+		.eq('auth_user_id', user.id)
+		.select('member_id')
+		.maybeSingle()
+
+	if (updateError) {
+		return c.json({ code: 500, message: updateError.message }, 500)
+	}
+
+	let memberId = typeof updatedMember?.member_id === 'string' ? updatedMember.member_id : null
 	if (!memberId) {
-		return c.json({ code: 500, message: 'member registration failed' }, 500)
+		const { data: insertedMember, error: insertError } = await supabase
+			.from('members')
+			.insert({
+				auth_user_id: user.id,
+				...memberFields,
+			})
+			.select('member_id')
+			.single()
+
+		if (insertError) {
+			const status = isUniqueViolation(insertError) ? 409 : 500
+			return c.json({ code: status, message: insertError.message }, status)
+		}
+
+		memberId = typeof insertedMember?.member_id === 'string' ? insertedMember.member_id : null
+		if (!memberId) {
+			return c.json({ code: 500, message: 'member registration failed' }, 500)
+		}
 	}
 
 	const userLinkResult = await saveUserLink(supabase, user.id, {
 		discordId: body.discord_id,
-		discordName: body.discord_name ?? '',
+		discordName: body.discord_name,
 		memberId,
 	})
 	if (userLinkResult.message) {
