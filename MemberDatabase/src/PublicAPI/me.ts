@@ -58,26 +58,7 @@ const ALLOWED_PATCH_KEY_TO_COLUMN: Record<string, string> = {
 
 const isBlank = (value: string): boolean => value.trim().length === 0
 const isSnowflake = (value: string): boolean => /^\d+$/.test(value.trim())
-
-const saveDiscordLink = async (
-	supabaseClient: SupabaseClient,
-	discordId: string,
-	discordName?: string,
-): Promise<{ message: string | null; status: number }> => {
-	const { error } = await supabaseClient.rpc('save_current_user_discord_link', {
-		p_discord_id: discordId,
-		p_display_name: discordName ?? null,
-	})
-
-	if (!error) {
-		return { message: null, status: 200 }
-	}
-
-	return {
-		message: error.message,
-		status: error.code === '23505' ? 409 : 500,
-	}
-}
+const isUniqueViolation = (error: { code?: string } | null): boolean => error?.code === '23505'
 
 const needsEnrollment = (body: MeBody): boolean => {
 	if (isBlank(body.full_name)) {
@@ -99,51 +80,51 @@ const needsEnrollment = (body: MeBody): boolean => {
 	return false
 }
 
-const getMemberIdFromUser = async (user: Variables['user'], supabaseClient: SupabaseClient): Promise<{ memberId: string | null; reason?: string }> => {
-	let lastRpcError: string | undefined
-
-	for (let i = 0; i < 2; i += 1) {
-		const { data: resolvedByRpc, error: rpcError } = await supabaseClient.rpc('resolve_member_id_for_current_user')
-		if (!rpcError && typeof resolvedByRpc === 'string' && resolvedByRpc.trim().length > 0) {
-			return { memberId: resolvedByRpc }
-		}
-
-		if (rpcError) {
-			lastRpcError = rpcError.message
-		}
+const saveUserLink = async (
+	supabaseClient: SupabaseClient,
+	authUserId: string,
+	options: {
+		discordId?: string
+		discordName?: string
+		memberId?: string
+	},
+): Promise<
+	| { message: null; status: 200 }
+	| { message: string; status: 409 | 500 }
+> => {
+	const userRow: Record<string, string | null> = {
+		auth_user_id: authUserId,
 	}
 
-	const appMetadata = user?.app_metadata as Record<string, unknown> | undefined
-	const memberIdFromMetadata = appMetadata?.member_id
-
-	if (typeof memberIdFromMetadata === 'string' && memberIdFromMetadata.trim().length > 0) {
-		return { memberId: memberIdFromMetadata }
+	if (options.memberId !== undefined) {
+		userRow.member_id = options.memberId
 	}
 
-	const auth_id = user?.id
-
-	if (!auth_id) {
-		return { memberId: null, reason: lastRpcError ?? 'auth user id is missing' }
+	if (options.discordId !== undefined) {
+		userRow.discord_id = options.discordId.trim()
 	}
 
-	const { data, error } = await supabaseClient
+	if (options.discordName !== undefined) {
+		userRow.display_name = options.discordName
+	}
+
+	const { error } = await supabaseClient
 		.from('users')
-		.select('member_id')
-		.eq('auth_user_id', auth_id)
-		.maybeSingle()
+		.upsert(userRow, { onConflict: 'auth_user_id' })
 
-	if (error) {
-		return { memberId: null, reason: lastRpcError ?? error.message }
+	if (!error) {
+		return { message: null, status: 200 }
 	}
 
 	return {
-		memberId: data?.member_id ?? null,
-		reason: data?.member_id ? undefined : (lastRpcError ?? 'member id not found in users table'),
+		message: error.message,
+		status: isUniqueViolation(error) ? 409 : 500,
 	}
 }
 
 app.post('/', async (c) => {
 	const supabase = c.get('supabase') as SupabaseClient
+	const user = c.get('user')
 
 	let body: RegistrationBody
 	try {
@@ -181,30 +162,38 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'Invalid field: discord_name' }, 400)
 	}
 
-	const { data, error } = await supabase.rpc('save_current_user_registration', {
-		p_full_name: body.full_name,
-		p_grade: body.grade,
-		p_student_id: body.student_id,
-		p_emergency_contact: body.emergency_contact,
-		p_student_email: body.student_email,
-		p_insurance: body.insurance,
-		p_some_allergy: body.some_allergy,
-		p_discord_name: body.discord_name,
-	})
+	const { data, error } = await supabase
+		.from('members')
+		.insert({
+			auth_user_id: user.id,
+			name: body.full_name,
+			grade: body.grade,
+			student_id: body.student_id,
+			emergency_contact: body.emergency_contact,
+			student_email: body.student_email,
+			insurance: body.insurance,
+			some_allergy: body.some_allergy,
+		})
+		.select('member_id')
+		.single()
 
 	if (error) {
-		return c.json({ code: 500, message: error.message }, 500)
+		const status = isUniqueViolation(error) ? 409 : 500
+		return c.json({ code: status, message: error.message }, status)
 	}
 
-	if (typeof data !== 'string' || data.trim().length === 0) {
-		return c.json({ code: 401, message: 'member seed failed' }, 401)
+	const memberId = typeof data?.member_id === 'string' ? data.member_id : null
+	if (!memberId) {
+		return c.json({ code: 500, message: 'member registration failed' }, 500)
 	}
 
-	if (body.discord_id !== undefined) {
-		const discordLinkResult = await saveDiscordLink(supabase, body.discord_id, body.discord_name)
-		if (discordLinkResult.message) {
-			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
-		}
+	const userLinkResult = await saveUserLink(supabase, user.id, {
+		discordId: body.discord_id,
+		discordName: body.discord_name ?? '',
+		memberId,
+	})
+	if (userLinkResult.message) {
+		return c.json({ code: userLinkResult.status, message: userLinkResult.message }, userLinkResult.status)
 	}
 
 	return c.json({ code: 201 }, 201)
@@ -213,21 +202,11 @@ app.post('/', async (c) => {
 app.get('/', async (c) => {
 	const supabase = c.get('supabase') as SupabaseClient
 	const user = c.get('user')
-	const memberResolution = await getMemberIdFromUser(user, supabase)
-	const memberId = memberResolution.memberId
-	const authId = user?.id
-
-	if (!memberId) {
-		return c.json(
-			{ code: 401, message: `member_id resolution failed: ${memberResolution.reason ?? 'unknown reason'}` },
-			401,
-		)
-	}
 
 	const { data: member, error: memberError } = await supabase
 		.from('members')
 		.select('name, grade, emergency_contact, student_id, student_email, insurance, some_allergy, grades(display_grade)')
-		.eq('member_id', memberId)
+		.eq('auth_user_id', user.id)
 		.maybeSingle()
 
 	if (memberError) {
@@ -238,22 +217,14 @@ app.get('/', async (c) => {
 		return c.json({ code: 404, message: 'Member not found' }, 404)
 	}
 
-	let discordName: string | null = null
-	let discordId: string | null = null
+	const { data: userRow, error: userError } = await supabase
+		.from('users')
+		.select('display_name, discord_id')
+		.eq('auth_user_id', user.id)
+		.maybeSingle()
 
-	if (authId) {
-		const { data: userRow, error: userError } = await supabase
-			.from('users')
-			.select('display_name, discord_id')
-			.eq('auth_user_id', authId)
-			.maybeSingle()
-
-		if (userError) {
-			return c.json({ code: 500, message: userError.message }, 500)
-		}
-
-		discordName = typeof userRow?.display_name === 'string' ? userRow.display_name : null
-		discordId = typeof userRow?.discord_id === 'string' ? userRow.discord_id : null
+	if (userError) {
+		return c.json({ code: 500, message: userError.message }, 500)
 	}
 
 	const gradesValue = member.grades as { display_grade?: string } | { display_grade?: string }[] | null
@@ -263,8 +234,8 @@ app.get('/', async (c) => {
 
 	const body: MeBody = {
 		full_name: String(member.name ?? ''),
-		discord_name: discordName,
-		discord_id: discordId,
+		discord_name: typeof userRow?.display_name === 'string' ? userRow.display_name : null,
+		discord_id: typeof userRow?.discord_id === 'string' ? userRow.discord_id : null,
 		grade: Number(member.grade),
 		display_grade: displayGrade,
 		student_id: String(member.student_id ?? ''),
@@ -280,15 +251,6 @@ app.get('/', async (c) => {
 app.patch('/', async (c) => {
 	const supabase = c.get('supabase') as SupabaseClient
 	const user = c.get('user')
-	const memberResolution = await getMemberIdFromUser(user, supabase)
-	const memberId = memberResolution.memberId
-
-	if (!memberId) {
-		return c.json(
-			{ code: 401, message: `member_id resolution failed: ${memberResolution.reason ?? 'unknown reason'}` },
-			401,
-		)
-	}
 
 	let patchBody: PatchBody
 	try {
@@ -310,6 +272,8 @@ app.patch('/', async (c) => {
 		return c.json({ code: 400, message: 'display_name and display_grade cannot be patched' }, 400)
 	}
 
+	const memberPatch: Record<string, string | number | boolean> = {}
+
 	for (const key of keys) {
 		if (key === 'discord_name') {
 			if (typeof patchBody.discord_name !== 'string') {
@@ -329,29 +293,52 @@ app.patch('/', async (c) => {
 		if (!column) {
 			return c.json({ code: 400, message: 'Unsupported patch field: ' + key }, 400)
 		}
+
+		const value = patchBody[key as keyof PatchBody]
+		if (value !== undefined) {
+			memberPatch[column] = value
+		}
 	}
 
-	const { data: patchData, error: patchError } = await supabase.rpc('patch_current_user_member', {
-		p_full_name: patchBody.full_name ?? patchBody.name,
-		p_grade: patchBody.grade,
-		p_student_id: patchBody.student_id,
-		p_emergency_contact: patchBody.emergency_contact,
-		p_student_email: patchBody.student_email,
-		p_insurance: patchBody.insurance,
-		p_some_allergy: patchBody.some_allergy,
-		p_discord_name: patchBody.discord_name,
-	})
+	let memberId: string | null = null
+	if (Object.keys(memberPatch).length > 0) {
+		const { data: member, error: memberError } = await supabase
+			.from('members')
+			.update(memberPatch)
+			.eq('auth_user_id', user.id)
+			.select('member_id')
+			.maybeSingle()
 
-	if (patchError) {
-		return c.json({ code: 500, message: patchError.message }, 500)
+		if (memberError) {
+			return c.json({ code: 500, message: memberError.message }, 500)
+		}
+
+		memberId = typeof member?.member_id === 'string' ? member.member_id : null
+		if (!memberId) {
+			return c.json({ code: 404, message: 'Member not found' }, 404)
+		}
 	}
 
-	if (typeof patchData !== 'string' || patchData.trim().length === 0) {
-		return c.json({ code: 401, message: 'member patch failed' }, 401)
-	}
+	if (patchBody.discord_id !== undefined || patchBody.discord_name !== undefined) {
+		if (!memberId) {
+			const { data: member, error: memberError } = await supabase
+				.from('members')
+				.select('member_id')
+				.eq('auth_user_id', user.id)
+				.maybeSingle()
 
-	if (patchBody.discord_id !== undefined) {
-		const discordLinkResult = await saveDiscordLink(supabase, patchBody.discord_id, patchBody.discord_name)
+			if (memberError) {
+				return c.json({ code: 500, message: memberError.message }, 500)
+			}
+
+			memberId = typeof member?.member_id === 'string' ? member.member_id : null
+		}
+
+		const discordLinkResult = await saveUserLink(supabase, user.id, {
+			discordId: patchBody.discord_id,
+			discordName: patchBody.discord_name,
+			memberId: memberId ?? undefined,
+		})
 		if (discordLinkResult.message) {
 			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
 		}

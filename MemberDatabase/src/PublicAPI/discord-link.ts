@@ -10,9 +10,11 @@ type DiscordLinkBody = {
 }
 
 const isSnowflake = (value: string): boolean => /^\d+$/.test(value.trim())
+const isUniqueViolation = (error: { code?: string } | null): boolean => error?.code === '23505'
 
 app.post('/', async (c) => {
 	const supabase = c.get('supabase') as SupabaseClient
+	const user = c.get('user')
 
 	let body: DiscordLinkBody
 	try {
@@ -29,24 +31,47 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'discord_name must be string' }, 400)
 	}
 
-	const { data, error } = await supabase.rpc('save_current_user_discord_link', {
-		p_discord_id: body.discord_id,
-		p_display_name: body.discord_name,
-	})
+	const { data: member, error: memberError } = await supabase
+		.from('members')
+		.select('member_id')
+		.eq('auth_user_id', user.id)
+		.maybeSingle()
+
+	if (memberError) {
+		return c.json({ code: 500, message: memberError.message }, 500)
+	}
+
+	const memberId = typeof member?.member_id === 'string' ? member.member_id : null
+	const userRow: Record<string, string | null> = {
+		auth_user_id: user.id,
+		discord_id: body.discord_id.trim(),
+	}
+
+	if (memberId) {
+		userRow.member_id = memberId
+	}
+
+	if (body.discord_name !== undefined) {
+		userRow.display_name = body.discord_name
+	}
+
+	const { error } = await supabase
+		.from('users')
+		.upsert(userRow, { onConflict: 'auth_user_id' })
 
 	if (error) {
-		const status = error.code === '23505' ? 409 : 500
+		const status = isUniqueViolation(error) ? 409 : 500
 		return c.json({ code: status, message: error.message }, status)
 	}
 
-	if (typeof data !== 'string' || data.trim().length === 0) {
+	if (body.discord_id.trim().length === 0) {
 		return c.json({ code: 401, message: 'discord link save failed' }, 401)
 	}
 
 	return c.json({
 		code: 200,
 		body: {
-			discord_id: data,
+			discord_id: body.discord_id.trim(),
 			discord_name: body.discord_name ?? null,
 		},
 	}, 200)
