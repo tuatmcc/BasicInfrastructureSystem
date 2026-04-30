@@ -10,22 +10,11 @@ export function getUserRoles(user: User | null): string[] {
   }
 
   const metadata = user.app_metadata as Record<string, unknown> | undefined;
-  const role = normalizeRole(metadata?.role);
-  return role ? [role] : [];
+  const role = metadata?.roles
+  console.log("getUserRoles", { role });
+  return metadata?.roles as string[] ?? [];
 }
 
 export function hasAdminRole(roles: readonly string[]): boolean {
   return roles.some((role) => role === "admin");
-}
-
-export function isAdminUser(user: User | null): boolean {
-  return hasAdminRole(getUserRoles(user));
-}
-
-export function formatRoleNames(roles: readonly string[]): string {
-  if (roles.length === 0) {
-    return "未設定";
-  }
-
-  return roles.join(", ");
 }

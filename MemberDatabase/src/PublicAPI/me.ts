@@ -23,6 +23,7 @@ type PatchBody = Partial<{
 type MeBody = {
 	full_name: string
 	discord_name: string | null
+	discord_id: string | null
 	discord_user_id: string | null
 	grade: number
 	display_grade: string
@@ -35,6 +36,7 @@ type MeBody = {
 
 type RegistrationBody = {
 	full_name: string
+	discord_id?: string
 	discord_user_id?: string
 	discord_name?: string
 	grade: number
@@ -71,51 +73,110 @@ const saveDiscordLink = async (
 	discordUserId: string,
 	discordName?: string,
 ): Promise<DiscordLinkResult> => {
-	const { data, error } = await supabase.rpc('save_current_user_discord_link', {
+	const rpcResponse = await supabase.rpc('save_current_user_discord_link', {
 		p_discord_id: discordUserId,
 		p_display_name: discordName,
 	})
 
-	if (error) {
-		const status = error.code === '23505' ? 409 : 500
+	if (rpcResponse.error) {
+		const status = rpcResponse.error.code === '23505' ? 409 : 500
 		return {
 			status,
-			message: error.message,
+			message: rpcResponse.error.message,
 		}
 	}
 
-	if (typeof data !== 'string' || data.trim().length === 0) {
+	if (typeof rpcResponse.data === 'string' && rpcResponse.data.trim().length > 0) {
+		return { status: 200 }
+	}
+
+	const { data: authData, error: authError } = await supabase.auth.getUser()
+	const authUserId = authData.user?.id
+
+	if (authError || !authUserId) {
 		return {
 			status: 500,
-			message: 'discord link save failed',
+			message: authError?.message ?? 'cannot determine auth user',
 		}
+	}
+
+	const { count: updateCount, error: updateError } = await supabase
+		.from('users')
+		.update({
+			discord_id: discordUserId,
+			display_name: discordName ?? undefined,
+		})
+		.eq('auth_user_id', authUserId)
+
+	if (updateError) {
+		return {
+			status: 500,
+			message: updateError.message,
+		}
+	}
+
+	if (updateCount && updateCount > 0) {
+		return { status: 200 }
+	}
+
+	const { count: insertCount, error: insertError } = await supabase
+		.from('users')
+		.insert({
+			auth_user_id: authUserId,
+			discord_id: discordUserId,
+			display_name: discordName ?? '',
+		})
+
+	if (insertError) {
+		return {
+			status: 500,
+			message: insertError.message,
+		}
+	}
+
+	if (insertCount && insertCount > 0) {
+		return { status: 200 }
 	}
 
 	return {
-		status: 200,
+		status: 500,
+		message: 'discord link save failed: no row created or updated',
 	}
 }
 
 
 
-const needsEnrollment = (body: MeBody): boolean => {
+const getEnrollmentBlockers = (body: MeBody): string[] => {
+	const blockers: string[] = []
+
 	if (isBlank(body.full_name)) {
-		return true
+		blockers.push('full_name')
 	}
 
-	if (isBlank(body.student_id) || isBlank(body.emergency_contact) || isBlank(body.student_email)) {
-		return true
+	if (isBlank(body.student_id)) {
+		blockers.push('student_id')
+	}
+
+	if (isBlank(body.emergency_contact)) {
+		blockers.push('emergency_contact')
+	}
+
+	if (isBlank(body.student_email)) {
+		blockers.push('student_email')
 	}
 
 	if (!Number.isFinite(body.grade) || body.grade <= 0) {
-		return true
+		blockers.push('grade')
 	}
 
-	if (!body.discord_user_id || !isSnowflake(body.discord_user_id)) {
-		return true
+	const enrollmentDiscordId = body.discord_id ?? body.discord_user_id
+	if (!enrollmentDiscordId) {
+		blockers.push('discord_id_missing')
+	} else if (!isSnowflake(enrollmentDiscordId)) {
+		blockers.push('discord_id_not_snowflake')
 	}
 
-	return false
+	return blockers
 }
 
 const getMemberIdFromUser = async (user: Variables['user'], supabaseClient: SupabaseClient): Promise<{ memberId: string | null; reason?: string }> => {
@@ -196,6 +257,10 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'Invalid field: discord_user_id' }, 400)
 	}
 
+	if (body.discord_id !== undefined && (typeof body.discord_id !== 'string' || !isSnowflake(body.discord_id))) {
+		return c.json({ code: 400, message: 'Invalid field: discord_id' }, 400)
+	}
+
 	if (body.discord_name !== undefined && typeof body.discord_name !== 'string') {
 		return c.json({ code: 400, message: 'Invalid field: discord_name' }, 400)
 	}
@@ -219,8 +284,9 @@ app.post('/', async (c) => {
 		return c.json({ code: 401, message: 'member seed failed' }, 401)
 	}
 
-	if (body.discord_user_id !== undefined) {
-		const discordLinkResult = await saveDiscordLink(supabase, body.discord_user_id, body.discord_name)
+	const discordUserId = body.discord_user_id ?? body.discord_id
+	if (discordUserId !== undefined) {
+		const discordLinkResult = await saveDiscordLink(supabase, discordUserId, body.discord_name)
 		if (discordLinkResult.message) {
 			const status = toJsonErrorStatus(discordLinkResult.status)
 			return c.json({ code: status, message: discordLinkResult.message }, status)
@@ -258,22 +324,54 @@ app.get('/', async (c) => {
 		return c.json({ code: 404, message: 'Member not found' }, 404)
 	}
 
-	let discordName: string | null = null
+let discordName: string | null = null
 	let discordId: string | null = null
 
 	if (authId) {
-		const { data: userRow, error: userError } = await supabase
-			.from('users')
-			.select('display_name, discord_user_id')
-			.eq('auth_user_id', authId)
-			.maybeSingle()
+		const discordSelectCandidates = [
+			'display_name, discord_id, discord_user_id',
+			'display_name, discord_id',
+			'display_name, discord_user_id',
+		]
 
-		if (userError) {
-			return c.json({ code: 500, message: userError.message }, 500)
+		type UserDiscordRow = {
+			display_name?: unknown
+			discord_id?: unknown
+			discord_user_id?: unknown
 		}
 
-		discordName = typeof userRow?.display_name === 'string' ? userRow.display_name : null
-		discordId = typeof userRow?.discord_user_id === 'string' ? userRow.discord_user_id : null
+		let userRow: UserDiscordRow | null = null
+		let userErrorMessage: string | null = null
+
+		for (const selectColumns of discordSelectCandidates) {
+			const { data, error } = await supabase
+				.from('users')
+				.select(selectColumns)
+				.eq('auth_user_id', authId)
+				.maybeSingle()
+
+			if (!error) {
+				userRow = data as UserDiscordRow | null
+				userErrorMessage = null
+				break
+			}
+
+			userErrorMessage = error.message
+
+			if (!/column\s+.*\s+does\s+not\s+exist/i.test(error.message)) {
+				break
+			}
+		}
+
+		if (userErrorMessage) {
+			return c.json({ code: 500, message: userErrorMessage }, 500)
+		}
+
+discordName = typeof userRow?.display_name === 'string' ? userRow.display_name : null
+		const discordIdFromRow = typeof userRow?.discord_id === 'string' ? userRow.discord_id : null
+		const discordUserIdFromRow = typeof userRow?.discord_user_id === 'string' ? userRow.discord_user_id : null
+		const discordIdCandidates = [discordIdFromRow, discordUserIdFromRow]
+		discordId = discordIdCandidates.find((value) => typeof value === 'string' && isSnowflake(value)) ?? null
 	}
 
 	const gradesValue = member.grades as { display_grade?: string } | { display_grade?: string }[] | null
@@ -284,6 +382,7 @@ app.get('/', async (c) => {
 	const body: MeBody = {
 		full_name: String(member.name ?? ''),
 		discord_name: discordName,
+		discord_id: discordId,
 		discord_user_id: discordId,
 		grade: Number(member.grade),
 		display_grade: displayGrade,
@@ -294,7 +393,15 @@ app.get('/', async (c) => {
 		some_allergy: Boolean(member.some_allergy),
 	}
 
-	return c.json({ code: 200, body, needs_enrollment: needsEnrollment(body) }, 200)
+const enrollmentBlockers = getEnrollmentBlockers(body)
+	const enrollmentRequired = enrollmentBlockers.length > 0
+
+	return c.json({
+		code: 200,
+		body,
+		needs_enrollment: enrollmentRequired,
+		needs_enrollment_reasons: enrollmentBlockers,
+	}, 200)
 })
 
 app.patch('/', async (c) => {
