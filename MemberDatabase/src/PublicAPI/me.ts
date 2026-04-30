@@ -14,6 +14,7 @@ type PatchBody = Partial<{
 	insurance: boolean
 	some_allergy: boolean
 	discord_id: string
+	discord_user_id: string
 	discord_name: string
 	display_name: string
 	display_grade: string
@@ -22,7 +23,7 @@ type PatchBody = Partial<{
 type MeBody = {
 	full_name: string
 	discord_name: string | null
-	discord_id: string | null
+	discord_user_id: string | null
 	grade: number
 	display_grade: string
 	student_id: string
@@ -34,7 +35,7 @@ type MeBody = {
 
 type RegistrationBody = {
 	full_name: string
-	discord_id?: string
+	discord_user_id?: string
 	discord_name?: string
 	grade: number
 	student_id: string
@@ -58,26 +59,44 @@ const ALLOWED_PATCH_KEY_TO_COLUMN: Record<string, string> = {
 
 const isBlank = (value: string): boolean => value.trim().length === 0
 const isSnowflake = (value: string): boolean => /^\d+$/.test(value.trim())
+const toJsonErrorStatus = (status: number): 409 | 500 => (status === 409 ? 409 : 500)
+
+type DiscordLinkResult = {
+	status: 200 | 409 | 500
+	message?: string
+}
 
 const saveDiscordLink = async (
-	supabaseClient: SupabaseClient,
-	discordId: string,
+	supabase: SupabaseClient,
+	discordUserId: string,
 	discordName?: string,
-): Promise<{ message: string | null; status: number }> => {
-	const { error } = await supabaseClient.rpc('save_current_user_discord_link', {
-		p_discord_id: discordId,
-		p_display_name: discordName ?? null,
+): Promise<DiscordLinkResult> => {
+	const { data, error } = await supabase.rpc('save_current_user_discord_link', {
+		p_discord_id: discordUserId,
+		p_display_name: discordName,
 	})
 
-	if (!error) {
-		return { message: null, status: 200 }
+	if (error) {
+		const status = error.code === '23505' ? 409 : 500
+		return {
+			status,
+			message: error.message,
+		}
+	}
+
+	if (typeof data !== 'string' || data.trim().length === 0) {
+		return {
+			status: 500,
+			message: 'discord link save failed',
+		}
 	}
 
 	return {
-		message: error.message,
-		status: error.code === '23505' ? 409 : 500,
+		status: 200,
 	}
 }
+
+
 
 const needsEnrollment = (body: MeBody): boolean => {
 	if (isBlank(body.full_name)) {
@@ -92,7 +111,7 @@ const needsEnrollment = (body: MeBody): boolean => {
 		return true
 	}
 
-	if (!body.discord_id || !isSnowflake(body.discord_id)) {
+	if (!body.discord_user_id || !isSnowflake(body.discord_user_id)) {
 		return true
 	}
 
@@ -173,8 +192,8 @@ app.post('/', async (c) => {
 		return c.json({ code: 400, message: 'Invalid boolean fields' }, 400)
 	}
 
-	if (body.discord_id !== undefined && (typeof body.discord_id !== 'string' || !isSnowflake(body.discord_id))) {
-		return c.json({ code: 400, message: 'Invalid field: discord_id' }, 400)
+	if (body.discord_user_id !== undefined && (typeof body.discord_user_id !== 'string' || !isSnowflake(body.discord_user_id))) {
+		return c.json({ code: 400, message: 'Invalid field: discord_user_id' }, 400)
 	}
 
 	if (body.discord_name !== undefined && typeof body.discord_name !== 'string') {
@@ -200,10 +219,11 @@ app.post('/', async (c) => {
 		return c.json({ code: 401, message: 'member seed failed' }, 401)
 	}
 
-	if (body.discord_id !== undefined) {
-		const discordLinkResult = await saveDiscordLink(supabase, body.discord_id, body.discord_name)
+	if (body.discord_user_id !== undefined) {
+		const discordLinkResult = await saveDiscordLink(supabase, body.discord_user_id, body.discord_name)
 		if (discordLinkResult.message) {
-			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
+			const status = toJsonErrorStatus(discordLinkResult.status)
+			return c.json({ code: status, message: discordLinkResult.message }, status)
 		}
 	}
 
@@ -244,7 +264,7 @@ app.get('/', async (c) => {
 	if (authId) {
 		const { data: userRow, error: userError } = await supabase
 			.from('users')
-			.select('display_name, discord_id')
+			.select('display_name, discord_user_id')
 			.eq('auth_user_id', authId)
 			.maybeSingle()
 
@@ -253,7 +273,7 @@ app.get('/', async (c) => {
 		}
 
 		discordName = typeof userRow?.display_name === 'string' ? userRow.display_name : null
-		discordId = typeof userRow?.discord_id === 'string' ? userRow.discord_id : null
+		discordId = typeof userRow?.discord_user_id === 'string' ? userRow.discord_user_id : null
 	}
 
 	const gradesValue = member.grades as { display_grade?: string } | { display_grade?: string }[] | null
@@ -264,7 +284,7 @@ app.get('/', async (c) => {
 	const body: MeBody = {
 		full_name: String(member.name ?? ''),
 		discord_name: discordName,
-		discord_id: discordId,
+		discord_user_id: discordId,
 		grade: Number(member.grade),
 		display_grade: displayGrade,
 		student_id: String(member.student_id ?? ''),
@@ -318,9 +338,10 @@ app.patch('/', async (c) => {
 			continue
 		}
 
-		if (key === 'discord_id') {
-			if (typeof patchBody.discord_id !== 'string' || !isSnowflake(patchBody.discord_id)) {
-				return c.json({ code: 400, message: 'discord_id must be a numeric Discord snowflake' }, 400)
+		if (key === 'discord_user_id' || key === 'discord_id') {
+			const discordUserId = patchBody.discord_user_id ?? patchBody.discord_id
+			if (typeof discordUserId !== 'string' || !isSnowflake(discordUserId)) {
+				return c.json({ code: 400, message: 'discord_user_id must be a numeric Discord snowflake' }, 400)
 			}
 			continue
 		}
@@ -350,10 +371,12 @@ app.patch('/', async (c) => {
 		return c.json({ code: 401, message: 'member patch failed' }, 401)
 	}
 
-	if (patchBody.discord_id !== undefined) {
-		const discordLinkResult = await saveDiscordLink(supabase, patchBody.discord_id, patchBody.discord_name)
+	const discordUserId = patchBody.discord_user_id ?? patchBody.discord_id
+	if (discordUserId !== undefined) {
+		const discordLinkResult = await saveDiscordLink(supabase, discordUserId, patchBody.discord_name)
 		if (discordLinkResult.message) {
-			return c.json({ code: discordLinkResult.status, message: discordLinkResult.message }, discordLinkResult.status)
+			const status = toJsonErrorStatus(discordLinkResult.status)
+			return c.json({ code: status, message: discordLinkResult.message }, status)
 		}
 	}
 
