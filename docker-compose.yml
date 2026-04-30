@@ -1,0 +1,21 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./DiscordConnector:/app/DiscordConnector
+    env_file:
+      - DiscordConnector/.env
+    environment:
+      - MOCK_MODE=${MOCK_MODE:-false}
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    working_dir: /app/DiscordConnector/PublicAPI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
