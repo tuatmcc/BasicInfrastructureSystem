@@ -22,7 +22,7 @@ const createRoleRoute = createRoute({
     method: "post",
     path: "/",
     request: {
-        body: { content: { "application/json": { schema: roleSchema } } }
+        body: { content: { "application/json": { schema:  z.string().openapi({ example: "admin" }).nullable()} } }
     },
     responses: {
         201: {
@@ -67,7 +67,7 @@ const updateRoleRoute = createRoute({
     path: "/{id}",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateRoleSchema } } }
+        body: { content: { "application/json": { schema: z.string().openapi({ example: "admin" }).nullable() } } }
     },
     responses: {
         200: {

@@ -2,13 +2,14 @@ import type { Context } from "hono"
 import { AppContext } from "../../core/types"
 import { roles } from "../../../drizzle/schema"
 
+
 // ***** role *****
 // ロール定義の管理ロジック
 // ロールの名前や ID などのマスターデータを操作します
 // *****************
 
 const mockRole = { 
-    role_id: "r-123", 
+    role_id: "123e4567-e89b-12d3-a456-426614174000", 
     role_name: "admin" 
 };
 
@@ -19,7 +20,7 @@ export const createRoleService = async (c: Context<AppContext>) => {
     const db = c.get("db");
 
     // 自動生成された roles オブジェクトを使用してインサート
-    const [newRole] = await db.insert(roles).values({
+    const newRole = await db.insert(roles).values({
       roleName: body.role_name
     }).returning();
 
@@ -30,7 +31,7 @@ export const createRoleService = async (c: Context<AppContext>) => {
 // ロール一覧を取得する
 export const listRolesService = async (c: Context<AppContext>) => {
     const db = c.get("db");
-    const allRoles = await db.select().from(roles);
+    const [allRoles] = await db.select().from(roles);
     return c.json(allRoles, 200);
 };
 
@@ -39,7 +40,7 @@ export const getRoleByIdService = async (c: Context<AppContext>) => {
     const id = c.req.param("id");
     const db = c.get("db");
     // TODO: idで検索するロジック
-    return c.json({ ...mockRole, role_id: id }, 200);
+    return c.json({ ...mockRole }, 200);
 };
 
 // update
