@@ -12,8 +12,8 @@ import { apiv0Router } from './api_v0/router'
 const app = new OpenAPIHono<AppContext>()
 
   .use('*',cors())
-  .use('*',dbMiddleware)
   .use('*',authMiddleware)
+  .use('*',dbMiddleware)
   
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc',(c: any): Response => {
