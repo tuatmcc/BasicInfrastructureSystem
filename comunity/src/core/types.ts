@@ -1,13 +1,14 @@
 import { authUser, appUser } from './auth'
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
 export type CloudflareBindings = {
-  SUPABASE_URL: string
+  DATABASE_URL: string
 }
 
 export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
-    db: unknown // todo: dbclient
+    db: NodePgDatabase
     appUser: appUser
   }
 }

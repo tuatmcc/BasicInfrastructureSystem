@@ -1,5 +1,6 @@
 import type { Context } from "hono"
 import { AppContext } from "../../core/types"
+import { roles } from "../../../drizzle/schema"
 
 // ***** role *****
 // ロール定義の管理ロジック
@@ -15,19 +16,30 @@ const mockRole = {
 // ロールを新規作成する
 export const createRoleService = async (c: Context<AppContext>) => {
     const body = await c.req.json();
-    return c.json({ ...mockRole, ...body }, 201);
+    const db = c.get("db");
+
+    // 自動生成された roles オブジェクトを使用してインサート
+    const [newRole] = await db.insert(roles).values({
+      roleName: body.role_name
+    }).returning();
+
+    return c.json(newRole, 201);
 };
 
 // read
 // ロール一覧を取得する
 export const listRolesService = async (c: Context<AppContext>) => {
-    return c.json([mockRole], 200);
+    const db = c.get("db");
+    const allRoles = await db.select().from(roles);
+    return c.json(allRoles, 200);
 };
 
 // 特定のロール情報を取得する
 export const getRoleByIdService = async (c: Context<AppContext>) => {
     const id = c.req.param("id");
-    return c.json({ ...mockRole}, 200);
+    const db = c.get("db");
+    // TODO: idで検索するロジック
+    return c.json({ ...mockRole, role_id: id }, 200);
 };
 
 // update
