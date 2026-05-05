@@ -18,7 +18,7 @@ export const listCategoriesService = async (c: Context<AppContext>) => c.json([m
 // 特定のカテゴリ情報を取得する
 export const getCategoryByIdService = async (c: Context<AppContext>) => {
     const id = c.req.param("id");
-    return c.json({ ...mockCategory, category_id: id }, 200);
+    return c.json({ ...mockCategory }, 200);
 };
 
 // update
