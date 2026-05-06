@@ -1,5 +1,10 @@
 import type { Context } from "hono"
 import { AppContext } from "../../core/types"
+import { users } from "../../../drizzle/schema";
+import { RouteHandler } from "@hono/zod-openapi"
+import { createUserRoute, deleteUserByIdRoute, getUserByIdRoute, getUserMeRoute, listUsersRoute, updateUserByIdRoute, updateUserMeRoute } from "./schema";
+import { eq } from "drizzle-orm";
+import { Router } from "hono/router";
 
 // ***** user *****
 // ユーザープロフィールのビジネスロジック
@@ -7,48 +12,81 @@ import { AppContext } from "../../core/types"
 // *****************
 
 const mockUser = { 
-    discord_user_id: "u-123", 
-    display_name: "John Doe", 
-    auth_user_id: "a-123", 
-    discord_id: "d-123", 
-    member_id: "m-123" 
+    discordUserId: "",
+    displayName: "John Doe",
+    memberId: "",
+    authUserId: "",
 };
 
 // create
 // ユーザーを新規作成する
-export const createUserService = async (c: Context<AppContext>) => c.json(mockUser, 201);
+export const createUserService: RouteHandler<typeof createUserRoute, AppContext>  = async (c) => {
+    const isadmin = ("admin" === c.get("appUser").role);
+    if (! isadmin){
+        return c.json({ message: "Unauthorized" }, 401);
+    }
+
+    const db = c.get("db");
+    const [newuser] = await db.insert(users).values(c.req.valid("json")).returning();
+
+    return c.json(newuser, 201);
+};
 
 // read
 // ユーザー一覧を取得する
-export const listUsersService = async (c: Context<AppContext>) => c.json([mockUser], 200);
+export const listUsersService: RouteHandler<typeof listUsersRoute,AppContext> = async (c) =>{
+    //todo: 条件で絞り込みできるようにする。
+    const isadmin = ("admin" === c.get("appUser").role);
+    if( ! isadmin) return c.json({ message: "権限がありません" },401);
+
+    const db = c.get("db");
+    const listusers = await db.select().from(users);
+    
+    return c.json(listusers,200);
+};
 
 // 自身の情報を取得する
-export const getUserMeService = async (c: Context<AppContext>) => {
-    const user = c.get("appUser");
-    return c.json({ ...mockUser, discord_user_id: user.id }, 200);
+export const getUserMeService: RouteHandler<typeof getUserMeRoute,AppContext> = async (c) => {
+    const appuser = c.get("appUser");
+    const [user] = await c.get("db").select().from(users).where(eq(users.id,appuser.id)) 
+    return c.json(user, 200);
 };
 
 // 特定ユーザーの情報を取得する
-export const getUserByIdService = async (c: Context<AppContext>) => {
-    const id = c.req.param("id");
-    return c.json(mockUser, 200);
+export const getUserByIdService: RouteHandler<typeof getUserByIdRoute,AppContext> = async (c) => {
+    const isadmin = ("admin" === c.get("appUser").role);
+    if( ! isadmin) return c.json({ message: "権限がありません" },401);
+
+    const [user] = await c.get("db").select().from(users).where(eq(users.id,c.req.param("id"))) 
+    return c.json(user, 200);
 };
 
 // update
 // 自身の情報を更新する
-export const updateUserMeService = async (c: Context<AppContext>) => {
+export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppContext> = async (c) => {
     const user = c.get("appUser");
-    const body = await c.req.json();
-    return c.json({ ...mockUser, ...body, discord_user_id: user.id }, 200);
+    const body = await c.req.valid("json");
+    const [updateuser] = await c.get("db").update(users).set(body).where(eq(users.id,user.id)).returning();
+
+    return c.json(updateuser, 200);
 };
 
 // 特定ユーザーの情報を更新する
-export const updateUserByIdService = async (c: Context<AppContext>) => {
-    const id = c.req.param("id");
-    const body = await c.req.json();
-    return c.json({ ...mockUser, ...body, discord_user_id: id }, 200);
+export const updateUserByIdService: RouteHandler<typeof updateUserByIdRoute,AppContext> = async (c) => {
+    const isadmin = ("admin" === c.get("appUser").role);
+    if( ! isadmin) return c.json({ message: "権限がありません" },401);
+
+    const body = await c.req.valid("json");
+    const [updateuser] = await c.get("db").update(users).set(body).where(eq(users.id,c.req.param("id"))).returning();
+    return c.json(updateuser, 200);
 };
 
 // delete
 // 特定ユーザーを削除する
-export const deleteUserByIdService = async (c: Context<AppContext>) => c.body(null, 204);
+export const deleteUserByIdService: RouteHandler<typeof deleteUserByIdRoute,AppContext> = async (c) => {
+    const isadmin = ("admin" === c.get("appUser").role);
+    if( ! isadmin) return c.json({ message: "権限がありません" },401);
+
+    await c.get("db").delete(users).where(eq(users.id,c.req.param("id")));
+    return c.json(null, 200);
+};

@@ -1,20 +1,12 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, users, members, grades, categories, channels, categoryRole, roles, channelRole, userRole } from "./schema";
+import { members, users, grades, categories, channels, userRole, roles, channelRole, categoryRole } from "./schema";
 
 export const usersRelations = relations(users, ({one, many}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [users.authUserId],
-		references: [usersInAuth.id]
-	}),
 	member: one(members, {
 		fields: [users.memberId],
 		references: [members.memberId]
 	}),
 	userRoles: many(userRole),
-}));
-
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
-	users: many(users),
 }));
 
 export const membersRelations = relations(members, ({one, many}) => ({
@@ -42,21 +34,21 @@ export const categoriesRelations = relations(categories, ({many}) => ({
 	categoryRoles: many(categoryRole),
 }));
 
-export const categoryRoleRelations = relations(categoryRole, ({one}) => ({
-	category: one(categories, {
-		fields: [categoryRole.categoryId],
-		references: [categories.categoryId]
+export const userRoleRelations = relations(userRole, ({one}) => ({
+	user: one(users, {
+		fields: [userRole.userId],
+		references: [users.id]
 	}),
 	role: one(roles, {
-		fields: [categoryRole.roleId],
+		fields: [userRole.roleId],
 		references: [roles.roleId]
 	}),
 }));
 
 export const rolesRelations = relations(roles, ({many}) => ({
-	categoryRoles: many(categoryRole),
-	channelRoles: many(channelRole),
 	userRoles: many(userRole),
+	channelRoles: many(channelRole),
+	categoryRoles: many(categoryRole),
 }));
 
 export const channelRoleRelations = relations(channelRole, ({one}) => ({
@@ -70,13 +62,13 @@ export const channelRoleRelations = relations(channelRole, ({one}) => ({
 	}),
 }));
 
-export const userRoleRelations = relations(userRole, ({one}) => ({
-	user: one(users, {
-		fields: [userRole.discordUserId],
-		references: [users.discordUserId]
+export const categoryRoleRelations = relations(categoryRole, ({one}) => ({
+	category: one(categories, {
+		fields: [categoryRole.categoryId],
+		references: [categories.categoryId]
 	}),
 	role: one(roles, {
-		fields: [userRole.roleId],
+		fields: [categoryRole.roleId],
 		references: [roles.roleId]
 	}),
 }));
