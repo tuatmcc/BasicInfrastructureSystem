@@ -9,6 +9,7 @@ export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
     db: NodePgDatabase
+    community:any
     appUser: appUser
   }
 }
