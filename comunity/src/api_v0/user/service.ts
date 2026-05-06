@@ -1,10 +1,8 @@
-import type { Context } from "hono"
 import { AppContext } from "../../core/types"
 import { users } from "../../../drizzle/schema";
 import { RouteHandler } from "@hono/zod-openapi"
 import { createUserRoute, deleteUserByIdRoute, getUserByIdRoute, getUserMeRoute, listUsersRoute, updateUserByIdRoute, updateUserMeRoute } from "./schema";
 import { eq } from "drizzle-orm";
-import { Router } from "hono/router";
 
 // ***** user *****
 // ユーザープロフィールのビジネスロジック
