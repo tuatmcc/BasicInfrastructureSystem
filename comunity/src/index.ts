@@ -5,6 +5,7 @@ import { cors } from 'hono/cors'
 import type { AppContext } from './core/types'
 import { dbMiddleware } from './core/db'
 import { authMiddleware } from './core/auth'
+import { communityMiddleware } from './core/community'
 import { errorHandler } from './core/error'
 
 import { apiv0Router } from './api_v0/router'
@@ -14,6 +15,7 @@ const app = new OpenAPIHono<AppContext>()
   .use('*',cors())
   .use('*',authMiddleware)
   .use('*',dbMiddleware)
+  .use('*',communityMiddleware)
   
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc',(c: any): Response => {
