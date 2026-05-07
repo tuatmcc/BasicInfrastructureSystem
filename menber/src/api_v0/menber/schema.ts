@@ -1,24 +1,206 @@
 import { z } from "@hono/zod-openapi"
+import { createRoute } from "@hono/zod-openapi";
+import { createSelectSchema, createInsertSchema } from "drizzle-zod"
+import { members } from "../../../../share/drizzle/schema"
+import { createUpdateSchema } from "drizzle-zod";
 
-export const MemberSchema = z.object({
-    member_id: z.string().openapi({ example: "member-123" }),
-    name: z.string().openapi({ example: "John Doe" }),
-    emergency_contact: z.string().openapi({ example: "Jane Doe - 555-1234" }),
-    grade: z.number().openapi({ example: 1 }),
-    insurance: z.boolean().openapi({ example: true }),
-    some_allergy: z.boolean().openapi({ example: false }),
-    student_email: z.string().email().openapi({ example: "john.doe@student.example.com" }),
-    student_id: z.string().openapi({ example: "S12345678" }),
-    created_at: z.string().openapi({ example: "2024-01-01T12:00:00Z" }),
-    updated_at: z.string().openapi({ example: "2024-01-02T12:00:00Z" }),
-}).openapi("Member")
+export const MemberSchema = createSelectSchema(members).openapi("Member")
 
-export const UpdateMemberSchema = z.object({
-    name: z.string().optional().openapi({ example: "John Doe" }),
-    emergency_contact: z.string().optional().openapi({ example: "Jane Doe - 555-1234" }),
-    grade: z.number().optional().openapi({ example: 1 }),
-    insurance: z.boolean().optional().openapi({ example: true }),
-    some_allergy: z.boolean().optional().openapi({ example: false }),
-    student_email: z.string().email().optional().openapi({ example: "john.doe@student.example.com" }),
-    student_id: z.string().optional().openapi({ example: "S12345678" }),
-}).openapi("UpdateMemberRequest")
+export const CreateMenberSchema = createInsertSchema(members).omit({memberId:true ,createdAt:true,updatedAt:true}).openapi("CreateMenber");
+
+
+export const UpdateMemberSchema = createUpdateSchema(members).partial().openapi("UpdateMemberRequest")
+
+
+// create
+// admin のみ
+export const createMenberRoute = createRoute({
+    method: 'post',
+    path: '/',
+    request:{
+        body:{
+            content:{
+                "application/json":{
+                    schema: CreateMenberSchema
+                }
+            }
+        }
+    },
+    responses: {
+        201: {
+            description: 'ユーザーの作成に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema,
+                },
+            },
+        },
+        400: {
+            description: 'リクエストが不正',
+        },
+    },
+});
+
+
+// read 
+export const getMenberRoute = createRoute({
+    method: 'get',
+    path: '/',
+    responses: {
+        200: {
+            description: '自身のユーザー情報の取得に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema,
+                },
+            },
+        },
+        401: {
+            description: '認証エラー',
+        },
+    },
+})
+
+// // admin のみ 
+// // id での取得
+// export const getMenbersByIdRoute = createRoute({
+//     method: 'get',
+//     path: '/',
+//     request: {
+//         params: z.object({
+//             id: z.string().openapi({ example: 'user-123' }).array(),
+//         }),
+//     },
+//     responses: {
+//         200: {
+//             description: 'ユーザー情報の取得に成功',
+//             content: {
+//                 'application/json': {
+//                     schema: MemberSchema.array(),
+//                 },
+//             },
+//         },
+//         403: {
+//             description: '権限がありません',
+//         },
+//         404: {
+//             description: 'ユーザーが見つからない',
+//         },
+//     },
+// })
+
+// // 条件付き一括取得　admin のみ
+// export const getMenbersByConditionRoute = createRoute({
+//     method: 'get',
+//     path: '/',
+//     request: {
+//         query: z.object({
+//             gradeup: z.string().optional().openapi({ example: '2019' }),
+//             gradedown: z.string().optional().openapi({ example: '2025' }),
+//         }),
+//     },
+//     responses: {
+//         200: {
+//             description: 'ユーザー一覧の取得に成功',
+//             content: {
+//                 'application/json': {
+//                     schema: MemberSchema.array(),
+//                 },
+//             },
+//         },
+//         403: {
+//             description: '権限がありません',
+//         },
+//     },
+// })
+
+// update
+// 自分自身の情報の更新
+export const updateMenberRoute = createRoute({
+    method: 'put',
+    path: '/',
+    request: {
+        body: {
+            content: {
+                'application/json': {
+                    schema: UpdateMemberSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: '自身のユーザー情報の更新に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema,
+                },
+            },
+        },
+        400: {
+            description: 'リクエストが不正',
+        },
+        401: {
+            description: '認証エラー',
+        },
+    },
+})
+
+// admin のみ　id での更新
+export const updateMenberByIdRoute = createRoute({
+    method: 'put',
+    path:'/:id',
+    request: {
+        params: z.object({
+            id: z.string().openapi({ example: 'user-123' }),
+        }),
+        body: {
+            content: {
+                'application/json': {
+                    schema: UpdateMemberSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: 'ユーザー情報の更新に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema,
+                },
+            },
+        },
+        403: {
+            description: '権限がありません',
+        },
+        400: {
+            description: 'リクエストが不正',
+        },
+        404: {
+            description: 'ユーザーが見つからない',
+        },
+    },
+})
+
+// delete (admin only)
+export const deleteMenberRoute = createRoute({
+    method: 'delete',
+    path: '/:id',
+    request: {
+        params: z.object({
+            id: z.string().openapi({ example: 'user-123' }),
+        }),
+    },
+    responses: {
+        204: {
+            description: 'ユーザーの削除に成功',
+        },
+        403: {
+            description: '権限がありません',
+        },
+        404: {
+            description: 'ユーザーが見つからない',
+        },
+    },
+})

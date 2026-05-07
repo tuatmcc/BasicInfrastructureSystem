@@ -13,6 +13,16 @@
     "types": [
         "./worker-configuration.d.ts",
         "node"
-    ]
+    ],
+    "paths": {
+      "drizzle-orm": ["./node_modules/drizzle-orm"],
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
+      "drizzle-kit": ["./node_modules/drizzle-kit"]
+    }
   },
+  "include": [
+    "src",
+    "../share",
+    "drizzle.config.ts"
+  ]
 }
