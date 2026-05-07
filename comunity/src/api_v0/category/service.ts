@@ -7,9 +7,8 @@ import {
     updateCategoryRoute, 
     deleteCategoryRoute 
 } from './schema'
-// schema.ts に Route 定義がない場合は service.ts 内で定義するか、router.ts から持ってくる必要があります。
-// 現状 router.ts に定義されているため、router.ts から export するか、service.ts を修正します。
-// ここではシンプルにするため、HonoのContextベースのまま型を整えます。
+import { categories } from '../../../drizzle/schema';
+
 
 // ***** category *****
 // カテゴリ管理のビジネスロジック
@@ -17,11 +16,15 @@ import {
 // *****************
 
 // create
-export const createCategoryService: any = async (c: any) => {
-  const categoryname = c.req.valid("json").category_name;
+export const createCategoryService:RouteHandler<typeof createCategoryRoute, AppContext> = async (c) => {
+  if( "admin" !== c.get("appUser").role){
+     return c.json({ message: "Unauthorized" }, 401);
+  }
+  const categoryname = c.req.valid("json").categoryName;
   const community = c.get('community');
 
-  const newCategory = await community.createCategory({name:categoryname});
+  await community.createCategory({name:categoryname});// エラーはlibでやってくれる
+  await c.get("db").insert(categories).values(c.req.valid("json"));
 
   return c.json(null, 201);
 };
@@ -39,12 +42,16 @@ export const listCategoriesService: any = async (c: any) => {
 
 // delete
 export const deleteCategoryService: any = async (c: any) => {
-  const id = c.req.param('id');
+  if( "admin" !== c.get("appUser").role){
+     return c.json({ message: "Unauthorized" }, 401);
+  }
+  const categorynId = c.req.valid("json").categoryId;
   const community = c.get('community');
-  
-  await community.deleteCategory(id);
-  
-  return c.body(null, 204);
+
+  await community.deleteCategory({id:categorynId});// エラーはlibでやってくれる
+  // await c.get("db").del(categories).values(c.req.valid("json"));
+
+  return c.json(null, 201);
 };
 
 export const getCategoryByIdService: any = async (c: any) => c.json({ error: 'Not implemented' }, 501);

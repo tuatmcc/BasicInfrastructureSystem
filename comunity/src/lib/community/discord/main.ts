@@ -1,6 +1,11 @@
 import type { CommunityProvider } from '../interface';
-import type { CreateCategoryInput, Category } from '../type';
-import { createCategoryAPI, deleteCategoryAPI, listCategoriesAPI } from './category';
+import type { 
+  CreateCategoryInput, 
+  CreateCategoryOutput, 
+  DeleteCategoryOutput, 
+  ListCategoriesOutput 
+} from '../type';
+import { createCategoryAPI, deleteCategoryAPI } from './category';
 
 export class DiscordProvider implements CommunityProvider {
   private readonly API_BASE = 'https://discord.com/api/v10';
@@ -10,7 +15,7 @@ export class DiscordProvider implements CommunityProvider {
     public readonly guildId: string
   ) {}
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request(method: string, path: string, body?: unknown): Promise<Response> {
     const response = await fetch(`${this.API_BASE}${path}`, {
       method,
       headers: {
@@ -26,17 +31,16 @@ export class DiscordProvider implements CommunityProvider {
       throw new Error(`Discord API Error: ${response.status} ${JSON.stringify(errorData)}`);
     }
 
-    if (response.status === 204) return undefined as T;
-    return response.json();
+    return response;
   }
 
-  async createCategory(input: CreateCategoryInput): Promise<Category> {
+  async createCategory(input: CreateCategoryInput): Promise<CreateCategoryOutput> {
     return createCategoryAPI(this, input);
   }
-  async deleteCategory(id: string): Promise<void> {
+  async deleteCategory(id: string): Promise<DeleteCategoryOutput> {
     return deleteCategoryAPI(this, id);
   }
-  async listCategories(): Promise<Category[]> {
-    return listCategoriesAPI(this);
-  }
+  // async listCategories(): Promise<ListCategoriesOutput> {
+  //   return listCategoriesAPI(this);
+  // }
 }

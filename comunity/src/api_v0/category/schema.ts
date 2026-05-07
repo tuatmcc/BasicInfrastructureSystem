@@ -1,15 +1,14 @@
 import { z } from '@hono/zod-openapi'
 import { createRoute } from "@hono/zod-openapi";
+import { createInsertSchema } from 'drizzle-zod';
+import { categories } from '../../../drizzle/schema';
 
 export const categorySchema = z.object({
     category_id: z.uuid().openapi({ example: '123e4567-e89b-12d3-a456-426614174000' }),
     category_name: z.string().openapi({ example: 'General' }),
 }).openapi('Category')
 
-export const createCategorySchema = z.object({
-    // category_id: z.uuid().openapi({ example: "123e4567-e89b-12d3-a456-426614174000" }),
-    category_name: z.string().openapi({ example: 'General' }),
-}).openapi('CreateCategoryRequest')
+export const createCategorySchema = createInsertSchema(categories).openapi('CreateCategoryRequest')
 
 export const updateCategorySchema = z.object({
     category_name: z.string().optional().openapi({ example: 'New Name' }),
@@ -25,7 +24,10 @@ export const createCategoryRoute = createRoute({
             "application/json": { 
                 schema: createCategorySchema 
             } } } },
-    responses: { 201: { description: "成功" } }
+    responses: { 
+        201: { description: "成功" },
+        401: { description: "Unauthorized", content: { "application/json": { schema: z.object({ message: z.string() }) } } }
+     }
 });
 
 // read
@@ -51,6 +53,7 @@ export const updateCategoryRoute = createRoute({
 });
 
 // delete
+// todo:discordカテゴリIPとDBでのカテゴリIDの２つ取らなきゃいけない
 export const deleteCategoryRoute = createRoute({
     method: "delete",
     path: "/{id}",
