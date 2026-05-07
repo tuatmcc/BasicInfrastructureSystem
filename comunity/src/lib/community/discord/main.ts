@@ -16,6 +16,7 @@ export class DiscordProvider implements CommunityProvider {
       headers: {
         Authorization: `Bot ${this.token}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'DiscordBot',
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -32,11 +33,9 @@ export class DiscordProvider implements CommunityProvider {
   async createCategory(input: CreateCategoryInput): Promise<Category> {
     return createCategoryAPI(this, input);
   }
-
   async deleteCategory(id: string): Promise<void> {
     return deleteCategoryAPI(this, id);
   }
-
   async listCategories(): Promise<Category[]> {
     return listCategoriesAPI(this);
   }

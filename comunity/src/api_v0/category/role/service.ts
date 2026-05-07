@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception"
 // カテゴリ権限管理のビジネスロジック
 // *****************
 
-const mockRole = { role_id: "r-123", role_name: "admin" };
+const mockRole = { roleId: "r-123", roleName: "admin" };
 
 // read
 // ロール一覧を取得する

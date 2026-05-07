@@ -1,17 +1,17 @@
 import { Category, CategorySchema, CreateCategoryInput } from '../type';
 import type { DiscordProvider } from './main';
 
+
+
 export async function createCategoryAPI(provider: DiscordProvider, input: CreateCategoryInput): Promise<Category> {
   const data = await provider.request<any>('POST', `/guilds/${provider.guildId}/channels`, {
     name: input.name,
-    type: 4, // 4 is Category in Discord
-    position: input.position,
+    type: 4 // 4 is Category in Discord
   });
 
   return CategorySchema.parse({
     id: data.id,
-    name: data.name,
-    position: data.position,
+    name: data.name
   });
 }
 
@@ -27,6 +27,6 @@ export async function listCategoriesAPI(provider: DiscordProvider): Promise<Cate
     .map(channel => CategorySchema.parse({
       id: channel.id,
       name: channel.name,
-      position: channel.position,
+      position: channel.position
     }));
 }

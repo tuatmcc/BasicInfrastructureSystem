@@ -1,5 +1,4 @@
 import { AppContext } from '../../core/types'
-import { CreateCategoryInputSchema } from '../../lib/community/interface'
 import { RouteHandler } from '@hono/zod-openapi'
 import { 
     createCategoryRoute, 
@@ -19,20 +18,12 @@ import {
 
 // create
 export const createCategoryService: any = async (c: any) => {
-  const body = await c.req.json();
+  const categoryname = c.req.valid("json").category_name;
   const community = c.get('community');
 
-  const input = CreateCategoryInputSchema.parse({
-    name: body.category_name,
-    position: body.position
-  });
+  const newCategory = await community.createCategory({name:categoryname});
 
-  const newCategory = await community.createCategory(input);
-
-  return c.json({
-    category_id: newCategory.id,
-    category_name: newCategory.name
-  }, 201);
+  return c.json(null, 201);
 };
 
 // read

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CreateCategoryInput,Category } from './type';
+import { CreateCategoryInput, Category } from './type';
 
 // --- Interface Definition ---
 
