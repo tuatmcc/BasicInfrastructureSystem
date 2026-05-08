@@ -18,17 +18,17 @@ export const users = pgTable("users", {
 	discordUserId: text("discord_user_id"),
 	displayName: text("display_name").notNull(),
 	memberId: uuid("member_id"),
-	authUserId: uuid("auth_user_id"),
+	authId: uuid("auth_id"),
 	id: uuid().defaultRandom().primaryKey().notNull(),
 }, (table) => [
 	index("idx_users_member_id").using("btree", table.memberId.asc().nullsLast().op("uuid_ops")),
-	uniqueIndex("users_auth_user_id_uidx").using("btree", table.authUserId.asc().nullsLast().op("uuid_ops")).where(sql`(auth_user_id IS NOT NULL)`),
+	uniqueIndex("users_auth_id_uidx").using("btree", table.authId.asc().nullsLast().op("uuid_ops")).where(sql`(auth_id IS NOT NULL)`),
 	foreignKey({
 			columns: [table.memberId],
 			foreignColumns: [members.memberId],
 			name: "users_member_id_fkey"
 		}).onDelete("set null"),
-	unique("users_auth_user_id_key").on(table.authUserId),
+	unique("users_auth_id_key").on(table.authId),
 	pgPolicy("authenticated user can read own row", { as: "permissive", for: "select", to: ["authenticated"] }),
 ]);
 
