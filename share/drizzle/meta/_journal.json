@@ -8,6 +8,20 @@
       "when": 1778158681719,
       "tag": "0000_great_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778241570809,
+      "tag": "0001_lean_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778241714540,
+      "tag": "0002_add_auth_trigger",
+      "breakpoints": true
     }
   ]
 }
