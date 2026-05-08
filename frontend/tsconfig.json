@@ -19,13 +19,20 @@
 			}
 		],
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@backend/*": ["../menber/src/*"],
+			"drizzle-orm": ["./node_modules/drizzle-orm"],
+			"drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
+			"hono": ["./node_modules/hono"],
+			"hono/*": ["./node_modules/hono/*"],
+			"@hono/zod-openapi": ["./node_modules/@hono/zod-openapi"],
+			"zod": ["./node_modules/zod"]
 		},
 		"types": [
 			"./cloudflare-env.d.ts",
 			"node"
 		]
 	},
-	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts", "../menber/src/**/*.ts"],
 	"exclude": ["node_modules"]
 }
