@@ -45,7 +45,7 @@ export default function DashboardPage() {
       <div className="max-w-4xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard (TanStack)</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-500">Welcome back to the Basic Infrastructure System</p>
           </div>
           <div className="bg-blue-100 text-blue-800 px-4 py-1 rounded-full text-sm font-medium">
@@ -105,17 +105,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-6">
-            <section className="bg-teal-600 rounded-xl p-6 text-white shadow-lg shadow-teal-200">
-              <h3 className="text-lg font-bold mb-2">Smart Caching</h3>
-              <p className="text-teal-50 text-sm mb-4">TanStack Query is managing the data lifecycle, including auto-refetching and error handling.</p>
-              <div className="space-y-2">
-                <div className="flex items-center text-sm">
-                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                  <span>Status: {isLoading ? 'Fetching...' : 'Synchronized'}</span>
-                </div>
-              </div>
-            </section>
-
             <section className="bg-white shadow-sm rounded-xl border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Links</h3>
               <ul className="space-y-3">
