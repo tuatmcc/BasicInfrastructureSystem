@@ -74,7 +74,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Grade</label>
-                  <p className="text-gray-900">{member?.grade}</p>
+                  <p className="text-gray-900">{member?.displayGrade}</p>
                 </div>
               </div>
             </section>
