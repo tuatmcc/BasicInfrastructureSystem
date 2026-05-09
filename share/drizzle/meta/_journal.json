@@ -22,6 +22,27 @@
       "when": 1778241714540,
       "tag": "0002_add_auth_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778304060372,
+      "tag": "0003_add_auth_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778304084177,
+      "tag": "0004_lumpy_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778310690704,
+      "tag": "0005_silky_luminals",
+      "breakpoints": true
     }
   ]
 }

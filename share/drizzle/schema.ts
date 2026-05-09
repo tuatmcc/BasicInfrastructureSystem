@@ -1,18 +1,7 @@
-import { pgTable, pgPolicy, integer, text, timestamp, bigint, index, uniqueIndex, foreignKey, unique, uuid, boolean, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, index, uniqueIndex, foreignKey, unique, pgPolicy, text, uuid, integer, timestamp, bigint, boolean, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
-
-export const grades = pgTable("grades", {
-	id: integer().primaryKey().notNull(),
-	displayGrade: text("display_grade").notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	year: bigint({ mode: "number" }).default(sql`EXTRACT(year FROM CURRENT_DATE)`).notNull(),
-}, (table) => [
-	pgPolicy("authenticated user can read public.grades", { as: "permissive", for: "select", to: ["authenticated"] }),
-]);
 
 export const users = pgTable("users", {
 	discordUserId: text("discord_user_id"),
@@ -30,6 +19,17 @@ export const users = pgTable("users", {
 		}).onDelete("set null"),
 	unique("users_auth_id_key").on(table.authId),
 	pgPolicy("authenticated user can read own row", { as: "permissive", for: "select", to: ["authenticated"] }),
+]);
+
+export const grades = pgTable("grades", {
+	id: integer().primaryKey().generatedAlwaysAsIdentity({ name: "grades_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
+	displayGrade: text("display_grade").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	year: bigint({ mode: "number" }).default(sql`EXTRACT(year FROM CURRENT_DATE)`).notNull(),
+}, (table) => [
+	pgPolicy("authenticated user can read public.grades", { as: "permissive", for: "select", to: ["authenticated"] }),
 ]);
 
 export const members = pgTable("members", {

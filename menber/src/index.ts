@@ -8,6 +8,7 @@ import { authMiddleware } from './core/auth'
 import { errorHandler } from './core/error'
 
 import { userRouter } from './api_v0/menber/router'
+import { gradeRouter } from './api_v0/grade/router'
 
 
 
@@ -29,6 +30,7 @@ const app = new OpenAPIHono<AppContext>()
   })
   .use('/ui', swaggerUI({ url: '/doc' }))
   .route('/menber', userRouter)
+  .route('/grade', gradeRouter)
 
 
   .onError(errorHandler)
