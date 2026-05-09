@@ -2,13 +2,13 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { MemberSchema, UpdateMemberSchema } from "./schema";
 import type { AppContext } from "../../core/types";
 import { 
-    createMenberServicet,
+    createMenberService,
     getMenberService,
     // getMenbersByIdService,
     // getMenbersByConditionService,
     updateMenberService,
     updateMenberByIdService,
-    deleteUserService 
+    deleteMenberService 
 } from "./service";
 
 import {
@@ -34,10 +34,10 @@ import {
 export const userRouter = new OpenAPIHono<AppContext>()
     .openapi(getMenberRoute, getMenberService)
     .openapi(updateMenberRoute, updateMenberService)
-    .openapi(createMenberRoute, createMenberServicet)
+    .openapi(createMenberRoute, createMenberService)
     // .openapi(getMenbersByIdRoute, getMenbersByIdService)
     // .openapi(getMenbersByConditionRoute, getMenbersByConditionService)
     .openapi(updateMenberByIdRoute, updateMenberByIdService)
-    .openapi(deleteMenberRoute, deleteUserService)
+    .openapi(deleteMenberRoute, deleteMenberService)
 
 

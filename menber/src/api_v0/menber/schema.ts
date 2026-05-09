@@ -4,7 +4,9 @@ import { createSelectSchema, createInsertSchema } from "drizzle-zod"
 import { members } from "../../../../share/drizzle/schema"
 import { createUpdateSchema } from "drizzle-zod";
 
-export const MemberSchema = createSelectSchema(members).openapi("Member")
+export const MemberSchema = createSelectSchema(members).extend({
+    displayGrade: z.string().optional().openapi({ example: 'B1' })
+}).openapi("Member")
 
 export const CreateMenberSchema = createInsertSchema(members).omit({memberId:true ,createdAt:true,updatedAt:true}).openapi("CreateMenber");
 

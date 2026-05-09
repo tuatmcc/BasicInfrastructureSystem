@@ -1,19 +1,15 @@
-import type { Context } from "hono"
 import { AppContext } from "../../core/types"
-
 import { RouteHandler } from "@hono/zod-openapi"
 import { createMenberRoute, 
     getMenberRoute, 
-    // getMenbersByIdRoute,
-// getMenbersByConditionRoute,
-updateMenberRoute,
-updateMenberByIdRoute,
-deleteMenberRoute
+    updateMenberRoute,
+    updateMenberByIdRoute,
+    deleteMenberRoute
  } from "./schema";
-import { members, users } from "../../../../share/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { members, users, grades } from "../../../../share/drizzle/schema";
+import { eq, sql, getTableColumns } from "drizzle-orm";
 
-export const createMenberServicet:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
+export const createMenberService:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
     if( "admin" !== c.get("appUser").role){
         return c.json(null, 403)
     }
@@ -27,51 +23,40 @@ export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = a
     const userId = c.get("appUser").id;
 
     const result = await c.get("db").select({
-        member: members
-    }).from(members).innerJoin(users,eq(members.memberId,users.memberId)).where(eq(users.id,userId));
+        ...getTableColumns(members),
+        displayGrade: grades.displayGrade
+    }).from(members)
+    .innerJoin(users,eq(members.memberId,users.memberId))
+    .innerJoin(grades, eq(members.grade, grades.id))
+    .where(eq(users.id,userId));
 
     if (result.length === 0) {
-        return c.json(null, 401); // スキーマに合わせて 401 または 404
+        return c.json(null, 401); 
     }
 
-    return c.json(result[0].member, 200);
+    return c.json(result[0], 200);
 };
-
-// export const getMenbersByIdService:RouteHandler<typeof getMenbersByIdRoute,AppContext>  = async (c) => {
-//     if( "admin" !== c.get("appUser").role){
-//         return c.json(null,403)
-//     }
-    
-//     const id = c.req.param("id");
-//     return c.json([mockMember], 200);
-// }
-
-// export const getMenbersByConditionService :RouteHandler<typeof getMenbersByConditionRoute,AppContext> = async (c) => {
-//     const user = c.get("appUser");
-//     if (user.role !== "admin") {
-//         throw new HTTPException(403, { message: "Forbidden" });
-//     }
-//     return c.json([mockMember], 200);
-// }
 
 export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContext> = async (c) => {
     const userId = c.get("appUser").id;
     const db = c.get("db");
+
+    const user = await db.select({ memberId: users.memberId }).from(users).where(eq(users.id, userId)).limit(1);
+    
+    if (user.length === 0 || !user[0].memberId) {
+        return c.json(null, 401);
+    }
 
     const updatedMenber = await db.update(members)
         .set({
             ...c.req.valid("json"),
             updatedAt: sql`now()`
         })
-        .where(eq(members.memberId, 
-            db.select({ memberId: users.memberId })
-              .from(users)
-              .where(eq(users.id, userId))
-        ))
+        .where(eq(members.memberId, user[0].memberId))
         .returning();
 
     if (updatedMenber.length === 0) {
-        return c.json(null, 401); // 自分自身が見つからない＝認証/マッピングエラー
+        return c.json(null, 401);
     }
 
     return c.json(updatedMenber[0], 200);
@@ -99,7 +84,7 @@ export const updateMenberByIdService:RouteHandler<typeof updateMenberByIdRoute,A
     return c.json(updated[0], 200);
 }
 
-export const deleteUserService:RouteHandler<typeof deleteMenberRoute,AppContext>  = async (c) => {
+export const deleteMenberService:RouteHandler<typeof deleteMenberRoute,AppContext>  = async (c) => {
     if( "admin" !== c.get("appUser").role){
         return c.json(null, 403)
     }
