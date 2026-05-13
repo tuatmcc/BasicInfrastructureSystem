@@ -6,6 +6,8 @@ export const communityMiddleware = async (c: Context<AppContext>, next: Next) =>
   const token = c.env.DISCORD_TOKEN;
   const guildId = c.env.DISCORD_GUILD_ID;
 
+  console.log(`[CommunityMiddleware] DISCORD_TOKEN present: ${!!token}, DISCORD_GUILD_ID present: ${!!guildId}`);
+
   if (!token || !guildId) {
     console.error('[CommunityMiddleware] Configuration missing: DISCORD_TOKEN or DISCORD_GUILD_ID is not set.');
   }

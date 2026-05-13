@@ -22,6 +22,9 @@ const getUserMeRolesRoute = createRoute({
         200: {
             description: "成功",
             content: { "application/json": { schema: roleSchema.array() } }
+        },
+        404: {
+            description:""
         }
     }
 });
@@ -35,6 +38,9 @@ const getUserRolesByIdRoute = createRoute({
         200: {
             description: "成功",
             content: { "application/json": { schema: roleSchema.array() } }
+        },
+        404: {
+            description:""
         }
     }
 });

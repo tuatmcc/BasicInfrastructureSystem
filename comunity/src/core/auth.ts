@@ -10,6 +10,7 @@ export type authUser = {
 
 export type appUser = {
   id: string,
+  discordid: string,
   name: string,
   displayName: string,
   role: 'admin' | 'user'
@@ -21,6 +22,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
     c.set('appUser', 
         {
             id: 'user-123',
+            discordid: "1501602493606662264",//　yufoxtest id
             name: 'johndoe',
             displayName: 'John Doe',
             role: 'admin'
