@@ -1,5 +1,5 @@
 import { z, createRoute } from "@hono/zod-openapi"
-import { roles } from "../../../drizzle/schema"
+import { roles } from "../../../../share/drizzle/schema"
 import { createSelectSchema, createInsertSchema } from "drizzle-zod"
 
 // ***** Schemas *****

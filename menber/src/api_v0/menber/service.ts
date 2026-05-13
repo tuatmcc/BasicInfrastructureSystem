@@ -10,17 +10,20 @@ import { members, users, grades } from "../../../../share/drizzle/schema";
 import { eq, sql, getTableColumns } from "drizzle-orm";
 
 export const createMenberService:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
-    if( "admin" !== c.get("appUser").role){
-        return c.json(null, 403)
+    const appUser = c.get("appUser");
+    if (!appUser || "admin" !== appUser.role) {
+        return c.json(null, 403);
     }
 
-    const createdMenber = await c.get("db").insert(members).values(c.req.valid("json")).returning()
+    const createdMenber = await c.get("db").insert(members).values(c.req.valid("json")).returning();
 
     return c.json(createdMenber[0], 201);
 };
 
 export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = async (c) => {
-    const userId = c.get("appUser").id;
+    const appUser = c.get("appUser");
+    if (!appUser) return c.json(null, 401);
+    const userId = appUser.id;
 
     const result = await c.get("db").select({
         ...getTableColumns(members),
@@ -38,7 +41,9 @@ export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = a
 };
 
 export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContext> = async (c) => {
-    const userId = c.get("appUser").id;
+    const appUser = c.get("appUser");
+    if (!appUser) return c.json(null, 401);
+    const userId = appUser.id;
     const db = c.get("db");
 
     const user = await db.select({ memberId: users.memberId }).from(users).where(eq(users.id, userId)).limit(1);
@@ -63,8 +68,9 @@ export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContex
 };
 
 export const updateMenberByIdService:RouteHandler<typeof updateMenberByIdRoute,AppContext>  = async (c) => {
-    if( "admin" !== c.get("appUser").role){
-        return c.json(null, 403)
+    const appUser = c.get("appUser");
+    if (!appUser || "admin" !== appUser.role) {
+        return c.json(null, 403);
     }
 
     const id = c.req.param("id");
@@ -85,8 +91,9 @@ export const updateMenberByIdService:RouteHandler<typeof updateMenberByIdRoute,A
 }
 
 export const deleteMenberService:RouteHandler<typeof deleteMenberRoute,AppContext>  = async (c) => {
-    if( "admin" !== c.get("appUser").role){
-        return c.json(null, 403)
+    const appUser = c.get("appUser");
+    if (!appUser || "admin" !== appUser.role) {
+        return c.json(null, 403);
     }
 
     const id = c.req.param("id");
