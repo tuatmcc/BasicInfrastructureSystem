@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CreateCategoryInput,Category } from './type';
+import { CreateCategoryInput, Category, Role } from './type';
 
 // --- Interface Definition ---
 
@@ -9,4 +9,7 @@ export interface CommunityProvider {
   createCategory(input: CreateCategoryInput): Promise<Category>;
   deleteCategory(id: string): Promise<void>;
   listCategories(): Promise<Category[]>;
+
+// role
+  listUserRoles(userId: string): Promise<Role[]>;
 }

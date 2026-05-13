@@ -4,7 +4,10 @@ import { createSelectSchema, createInsertSchema } from "drizzle-zod"
 
 // ***** Schemas *****
 
-export const roleSchema = createSelectSchema(roles).openapi("Role")
+export const roleSchema = z.object({
+    roleId: z.string().openapi({ example: "1450087368114704484" }),
+    roleName: z.string().openapi({ example: "Admin" })
+}).openapi("Role")
 
 export const createRoleSchema = createInsertSchema(roles).omit({ roleId: true }).openapi("CreateRoleRequest")
 

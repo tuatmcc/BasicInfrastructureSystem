@@ -6,6 +6,7 @@ export type CloudflareBindings = {
   DATABASE_URL: string
   DISCORD_TOKEN: string
   DISCORD_GUILD_ID: string
+  SUPABASE_URL: string
 }
 
 export type AppContext = {

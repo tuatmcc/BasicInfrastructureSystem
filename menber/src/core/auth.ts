@@ -12,6 +12,7 @@ export type authUser = {
 
 export type appUser = {
   id: string,
+  discordid:string | null,
   name: string,
   displayName: string,
   role: 'admin' | 'user'
@@ -77,7 +78,8 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
     const result = await db.select({
       id: users.id,
       displayName: users.displayName,
-      roleName: roles.roleName
+      roleName: roles.roleName,
+      discordUserId: users.discordUserId
     })
     .from(users)
     .leftJoin(userRole, eq(users.id, userRole.userId))
@@ -93,6 +95,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
     c.set('appUser', {
       id: dbUser.id,
+      discordid: dbUser.discordUserId,
       name: dbUser.displayName,
       displayName: dbUser.displayName,
       role: (dbUser.roleName as 'admin' | 'user') || 'user'
