@@ -1,10 +1,10 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { client } from '@/lib/client'
+import { client, communityClient } from '@/lib/client'
 
 export default function DashboardPage() {
-  const { data: member, isLoading, error } = useQuery({
+  const { data: member, isLoading: isMemberLoading, error } = useQuery({
     queryKey: ['member'],
     queryFn: async () => {
       const res = await client.menber.$get()
@@ -14,6 +14,21 @@ export default function DashboardPage() {
       return res.json()
     },
   })
+
+  // communityClient を使用してロール一覧を取得
+  const { data: roles, isLoading: isRolesLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      // バックエンドのルーター定義を整理したことで、anyなしで型が通るようになります
+      const res = await communityClient.api.v0.user.me.role.$get()
+      if (!res.ok) {
+        throw new Error(`Roles API Error: ${res.status}`)
+      }
+      return res.json()
+    },
+  })
+
+  const isLoading = isMemberLoading || isRolesLoading
 
   if (isLoading) {
     return (
@@ -77,12 +92,7 @@ export default function DashboardPage() {
                   <p className="text-gray-900">{member?.displayGrade}</p>
                 </div>
               </div>
-            </section>
-
-            <section className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-800">Additional Details</h2>
-              </div>
+           
               <div className="p-6 space-y-4">
                 <div className="flex justify-between items-center py-2 border-b border-gray-50">
                   <span className="text-gray-600">Emergency Contact</span>
@@ -100,6 +110,29 @@ export default function DashboardPage() {
                     {member?.someAllergy ? 'Documented' : 'None Reported'}
                   </span>
                 </div>
+              </div>
+            </section>
+
+                        {/* Roles Section */}
+            <section className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-800">Community Roles</h2>
+              </div>
+              <div className="p-6">
+                {roles && roles.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {roles.map((role) => (
+                      <span 
+                        key={role.roleId} 
+                        className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-md text-sm font-medium"
+                      >
+                        {role.roleName}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No roles assigned</p>
+                )}
               </div>
             </section>
           </div>

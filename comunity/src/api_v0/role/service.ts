@@ -1,5 +1,5 @@
 import { AppContext } from "../../core/types"
-import { roles } from "../../../drizzle/schema"
+import { roles } from "../../../../share/drizzle/schema"
 import { eq } from "drizzle-orm"
 import { RouteHandler } from "@hono/zod-openapi"
 import { 

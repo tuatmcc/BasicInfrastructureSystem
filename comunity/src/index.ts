@@ -12,13 +12,13 @@ import { apiv0Router } from './api_v0/router'
 
 const app = new OpenAPIHono<AppContext>()
 
-  .use('*',cors())
-  .use('*',authMiddleware)
-  .use('*',dbMiddleware)
-  .use('*',communityMiddleware)
+  .use('*', cors())
+  .use('*', dbMiddleware)
+  .use('*', communityMiddleware)
+  .use('/api/*', authMiddleware)
   
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
-  .get('doc',(c: any): Response => {
+  .get('doc', (c: any): Response => {
     return c.json((app as OpenAPIHono).getOpenAPI31Document({
       openapi: '3.1.0',
       info: {
