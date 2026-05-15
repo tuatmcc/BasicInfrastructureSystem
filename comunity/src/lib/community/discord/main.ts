@@ -1,6 +1,5 @@
 import type { CommunityProvider } from '../interface';
-import type { CreateCategoryInput, Category, Role } from '../type';
-import { createCategoryAPI, deleteCategoryAPI, listCategoriesAPI } from './category';
+import type { Role } from '../type';
 import { listUserRolesAPI } from './role';
 
 export class DiscordProvider implements CommunityProvider {
@@ -28,18 +27,6 @@ export class DiscordProvider implements CommunityProvider {
 
     if (response.status === 204) return undefined as T;
     return response.json();
-  }
-
-  async createCategory(input: CreateCategoryInput): Promise<Category> {
-    return createCategoryAPI(this, input);
-  }
-
-  async deleteCategory(id: string): Promise<void> {
-    return deleteCategoryAPI(this, id);
-  }
-
-  async listCategories(): Promise<Category[]> {
-    return listCategoriesAPI(this);
   }
 
   async listUserRoles(userId: string): Promise<Role[]> {
