@@ -15,20 +15,20 @@ export default function DashboardPage() {
     },
   })
 
-  // communityClient を使用してロール一覧を取得
-  const { data: roles, isLoading: isRolesLoading } = useQuery({
-    queryKey: ['roles'],
-    queryFn: async () => {
-      // バックエンドのルーター定義を整理したことで、anyなしで型が通るようになります
-      const res = await communityClient.api.v0.user.me.role.$get()
-      if (!res.ok) {
-        throw new Error(`Roles API Error: ${res.status}`)
-      }
-      return res.json()
-    },
-  })
+  // // communityClient を使用してロール一覧を取得
+  // const { data: roles, isLoading: isRolesLoading } = useQuery({
+  //   queryKey: ['roles'],
+  //   queryFn: async () => {
+  //     // バックエンドのルーター定義を整理したことで、anyなしで型が通るようになります
+  //     const res = await communityClient.api.v0.user.me.role.$get()
+  //     if (!res.ok) {
+  //       throw new Error(`Roles API Error: ${res.status}`)
+  //     }
+  //     return res.json()
+  //   },
+  // })
 
-  const isLoading = isMemberLoading || isRolesLoading
+  const isLoading = isMemberLoading // || isRolesLoading
 
   if (isLoading) {
     return (
@@ -113,7 +113,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-                        {/* Roles Section */}
+                        {/* Roles Section
             <section className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
               <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-800">Community Roles</h2>
@@ -134,7 +134,7 @@ export default function DashboardPage() {
                   <p className="text-gray-500 italic">No roles assigned</p>
                 )}
               </div>
-            </section>
+            </section> */}
           </div>
 
           <div className="space-y-6">
