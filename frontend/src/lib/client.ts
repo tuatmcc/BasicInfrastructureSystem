@@ -4,26 +4,31 @@ import type { App as CommunityApp } from '@community/index'
 import { createClient } from './supabase'
 
 const getHeaders = async () => {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
   const headers: Record<string, string> = {}
   
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`
-  }
+  // クッキーから 'app-authorization' (独自JWT) を取得する
+  // 注: HttpOnly クッキーを JS から直接取得することはできません。
+  // そのため、ここではブラウザのクッキー送信機能に任せるか、
+  // あるいはサーバーサイドでのリクエストの場合はクッキーをヘッダーに移し替える必要があります。
+  
+  // しかし、Hono Client (hc) をブラウザで使用している場合、
+  // fetch のデフォルト挙動（credentials: 'include'）により、
+  // Cookie は自動的に送信されます。
   
   return headers
 }
 
 export const getMemberClient = (baseUrl?: string) => {
   return hc<MemberApp>(baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8788', {
-    headers: getHeaders
+    headers: getHeaders,
+    fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
   })
 }
 
 export const getCommunityClient = (baseUrl?: string) => {
   return hc<CommunityApp>(baseUrl || process.env.NEXT_PUBLIC_COMMUNITY_API_URL || 'http://localhost:8787', {
-    headers: getHeaders
+    headers: getHeaders,
+    fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
   })
 }
 

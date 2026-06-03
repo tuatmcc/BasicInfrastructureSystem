@@ -1,16 +1,7 @@
 import { relations } from "drizzle-orm/relations";
-import { members, users, grades, categories, channels, userRole, roles, channelRole, categoryRole } from "./schema";
+import { grades, members, categories, channels, roles, userRole, channelRole, categoryRole } from "./schema";
 
-export const usersRelations = relations(users, ({one, many}) => ({
-	member: one(members, {
-		fields: [users.memberId],
-		references: [members.memberId]
-	}),
-	userRoles: many(userRole),
-}));
-
-export const membersRelations = relations(members, ({one, many}) => ({
-	users: many(users),
+export const membersRelations = relations(members, ({one}) => ({
 	grade: one(grades, {
 		fields: [members.grade],
 		references: [grades.id]
@@ -35,10 +26,6 @@ export const categoriesRelations = relations(categories, ({many}) => ({
 }));
 
 export const userRoleRelations = relations(userRole, ({one}) => ({
-	user: one(users, {
-		fields: [userRole.userId],
-		references: [users.id]
-	}),
 	role: one(roles, {
 		fields: [userRole.roleId],
 		references: [roles.roleId]

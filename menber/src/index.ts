@@ -10,13 +10,21 @@ import { errorHandler } from './core/error'
 import { userRouter } from './api_v0/menber/router'
 import { gradeRouter } from './api_v0/grade/router'
 
-
-
 const app = new OpenAPIHono<AppContext>()
 
-  .use('*',cors())
+  // CORSの調整: credentialsを許可し、originを動的に設定
+  .use('*', async (c, next) => {
+    // フロントエンドからのリクエストに対してCookieを許可する
+    const corsMiddleware = cors({
+      origin: 'http://localhost:3000', // 必要に応じて環境変数から取得
+      credentials: true,
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+    })
+    return corsMiddleware(c, next)
+  })
   .use('*',dbMiddleware)
-  .use('*',authMiddleware)
+  .use('/api/*',authMiddleware)
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc',(c: any): Response => {
     return c.json((app as OpenAPIHono).getOpenAPI31Document({
@@ -29,9 +37,8 @@ const app = new OpenAPIHono<AppContext>()
     }));
   })
   .use('/ui', swaggerUI({ url: '/doc' }))
-  .route('/menber', userRouter)
-  .route('/grade', gradeRouter)
-
+  .route('/api/menber', userRouter)
+  .route('/api/grade', gradeRouter)
 
   .onError(errorHandler)
   

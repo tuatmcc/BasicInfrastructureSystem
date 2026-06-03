@@ -1,12 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { users } from "../../../../share/drizzle/schema";
+import { user } from "../../../../share/drizzle/schema";
 import { createSelectSchema, createInsertSchema } from "drizzle-zod"
 
-export const createUserSchema = createInsertSchema(users).omit({ id: true }).openapi("CreateUserRequest")
+export const createUserSchema = createInsertSchema(user).omit({ id: true }).openapi("CreateUserRequest")
 
-export const getUserSchema = createSelectSchema(users).openapi("User")
+export const getUserSchema = createSelectSchema(user).openapi("User")
 
-export const UpdateUserSchema = createInsertSchema(users).omit({id:true}).partial().openapi("UpdateUserRequest")
+export const UpdateUserSchema = createInsertSchema(user).omit({id:true}).partial().openapi("UpdateUserRequest")
 
 
 // create

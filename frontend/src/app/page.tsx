@@ -113,7 +113,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
-                        {/* Roles Section
+            {/* Roles Section
             <section className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
               <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-800">Community Roles</h2>

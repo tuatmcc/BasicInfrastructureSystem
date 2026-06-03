@@ -6,7 +6,16 @@ export type CloudflareBindings = {
   DATABASE_URL: string
   DISCORD_TOKEN: string
   DISCORD_GUILD_ID: string
-  SUPABASE_URL: string
+  SUPABASE_ID: string
+  SUPABASE_SECRET_KEY: string
+  FRONTEND_URL: string
+  COMMUNITY_URL: string
+  JWT_SECRET: string
+  COOKIE_DOMAIN: string
+  GITHUB_CLIENT_ID: string
+  GITHUB_CLIENT_SECRET: string
+  DISCORD_CLIENT_ID: string
+  DISCORD_CLIENT_SECRET: string
 }
 
 export type AppContext = {
