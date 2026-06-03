@@ -1,36 +1,75 @@
-import { pgTable, index, uniqueIndex, foreignKey, unique, pgPolicy, text, uuid, integer, timestamp, bigint, boolean, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, text, uuid, integer, timestamp, bigint, boolean, foreignKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
+// --- Better Auth Tables ---
 
-
-export const users = pgTable("users", {
+export const user = pgTable("user", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	email: text("email").notNull().unique(),
+	emailVerified: boolean("email_verified").notNull(),
+	image: text("image"),
+	createdAt: timestamp("created_at").notNull(),
+	updatedAt: timestamp("updated_at").notNull(),
+    
+    // Custom fields integrated from previous architecture
 	discordUserId: text("discord_user_id"),
-	displayName: text("display_name").notNull(),
+	displayName: text("display_name"),
 	memberId: uuid("member_id"),
-	authId: uuid("auth_id"),
-	id: uuid().defaultRandom().primaryKey().notNull(),
+    role: text("role").default("user").notNull(), // Added role for RBAC
 }, (table) => [
-	index("idx_users_member_id").using("btree", table.memberId.asc().nullsLast().op("uuid_ops")),
-	uniqueIndex("users_auth_id_uidx").using("btree", table.authId.asc().nullsLast().op("uuid_ops")).where(sql`(auth_id IS NOT NULL)`),
 	foreignKey({
 			columns: [table.memberId],
 			foreignColumns: [members.memberId],
-			name: "users_member_id_fkey"
+			name: "user_member_id_fkey"
 		}).onDelete("set null"),
-	unique("users_auth_id_key").on(table.authId),
-	pgPolicy("authenticated user can read own row", { as: "permissive", for: "select", to: ["authenticated"] }),
 ]);
+
+export const session = pgTable("session", {
+	id: text("id").primaryKey(),
+	expiresAt: timestamp("expires_at").notNull(),
+	token: text("token").notNull().unique(),
+	createdAt: timestamp("created_at").notNull(),
+	updatedAt: timestamp("updated_at").notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = pgTable("account", {
+	id: text("id").primaryKey(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: timestamp("access_token_expires_at"),
+	refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+	scope: text("scope"),
+	password: text("password"),
+	createdAt: timestamp("created_at").notNull(),
+	updatedAt: timestamp("updated_at").notNull(),
+});
+
+export const verification = pgTable("verification", {
+	id: text("id").primaryKey(),
+	identifier: text("identifier").notNull(),
+	value: text("value").notNull(),
+	expiresAt: timestamp("expires_at").notNull(),
+	createdAt: timestamp("created_at"),
+	updatedAt: timestamp("updated_at"),
+});
+
+// --- Application Tables ---
 
 export const grades = pgTable("grades", {
 	id: integer().primaryKey().generatedAlwaysAsIdentity({ name: "grades_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	displayGrade: text("display_grade").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
 	year: bigint({ mode: "number" }).default(sql`EXTRACT(year FROM CURRENT_DATE)`).notNull(),
-}, (table) => [
-	pgPolicy("authenticated user can read public.grades", { as: "permissive", for: "select", to: ["authenticated"] }),
-]);
+});
 
 export const members = pgTable("members", {
 	name: text().notNull(),
@@ -49,81 +88,4 @@ export const members = pgTable("members", {
 			foreignColumns: [grades.id],
 			name: "members_grade_fkey"
 		}).onDelete("set null"),
-	pgPolicy("admin user can read all rows", { as: "permissive", for: "select", to: ["authenticated"] }),
-	pgPolicy("members_select_own_or_admin", { as: "permissive", for: "select", to: ["public"] }),
-	pgPolicy("members_update_own_or_admin", { as: "permissive", for: "update", to: ["public"] }),
-]);
-
-export const categories = pgTable("categories", {
-	categoryId: uuid("category_id").defaultRandom().primaryKey().notNull(),
-	categoryName: text("category_name").notNull(),
-});
-
-export const roles = pgTable("roles", {
-	roleId: uuid("role_id").defaultRandom().primaryKey().notNull(),
-	roleName: text("role_name").notNull(),
-});
-
-export const channels = pgTable("channels", {
-	channelId: uuid("channel_id").defaultRandom().primaryKey().notNull(),
-	channelName: text("channel_name").notNull(),
-	categoryId: uuid("category_id"),
-}, (table) => [
-	index("idx_channels_category_id").using("btree", table.categoryId.asc().nullsLast().op("uuid_ops")),
-	foreignKey({
-			columns: [table.categoryId],
-			foreignColumns: [categories.categoryId],
-			name: "channels_category_id_fkey"
-		}).onDelete("cascade"),
-]);
-
-export const userRole = pgTable("user_role", {
-	userId: uuid("user_id").notNull(),
-	roleId: uuid("role_id").notNull(),
-}, (table) => [
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "user_role_user_id_fkey"
-		}),
-	foreignKey({
-			columns: [table.roleId],
-			foreignColumns: [roles.roleId],
-			name: "user_roles_role_id_fkey"
-		}).onDelete("cascade"),
-	primaryKey({ columns: [table.userId, table.roleId], name: "user_role_pkey"}),
-]);
-
-export const channelRole = pgTable("channel_role", {
-	channelId: uuid("channel_id").notNull(),
-	roleId: uuid("role_id").notNull(),
-}, (table) => [
-	foreignKey({
-			columns: [table.channelId],
-			foreignColumns: [channels.channelId],
-			name: "channel_role_access_channel_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.roleId],
-			foreignColumns: [roles.roleId],
-			name: "channel_role_access_role_id_fkey"
-		}).onDelete("cascade"),
-	primaryKey({ columns: [table.channelId, table.roleId], name: "channel_role_access_pkey"}),
-]);
-
-export const categoryRole = pgTable("category_role", {
-	categoryId: uuid("category_id").notNull(),
-	roleId: uuid("role_id").notNull(),
-}, (table) => [
-	foreignKey({
-			columns: [table.categoryId],
-			foreignColumns: [categories.categoryId],
-			name: "category_role_access_category_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.roleId],
-			foreignColumns: [roles.roleId],
-			name: "category_role_access_role_id_fkey"
-		}).onDelete("cascade"),
-	primaryKey({ columns: [table.categoryId, table.roleId], name: "category_role_access_pkey"}),
 ]);

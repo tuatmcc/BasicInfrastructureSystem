@@ -6,7 +6,7 @@ import { createMenberRoute,
     updateMenberByIdRoute,
     deleteMenberRoute
  } from "./schema";
-import { members, users, grades } from "../../../../share/drizzle/schema";
+import { members, user, grades } from "../../../../share/drizzle/schema";
 import { eq, sql, getTableColumns } from "drizzle-orm";
 
 export const createMenberService:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
@@ -29,9 +29,9 @@ export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = a
         ...getTableColumns(members),
         displayGrade: grades.displayGrade
     }).from(members)
-    .innerJoin(users,eq(members.memberId,users.memberId))
+    .innerJoin(user,eq(members.memberId,user.memberId))
     .innerJoin(grades, eq(members.grade, grades.id))
-    .where(eq(users.id,userId));
+    .where(eq(user.id,userId));
 
     if (result.length === 0) {
         return c.json(null, 401); 
@@ -46,9 +46,9 @@ export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContex
     const userId = appUser.id;
     const db = c.get("db");
 
-    const user = await db.select({ memberId: users.memberId }).from(users).where(eq(users.id, userId)).limit(1);
+    const users = await db.select({ memberId: user.memberId }).from(user).where(eq(user.id, userId)).limit(1);
     
-    if (user.length === 0 || !user[0].memberId) {
+    if (users.length === 0 || !users[0].memberId) {
         return c.json(null, 401);
     }
 
@@ -57,7 +57,7 @@ export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContex
             ...c.req.valid("json"),
             updatedAt: sql`now()`
         })
-        .where(eq(members.memberId, user[0].memberId))
+        .where(eq(members.memberId, users[0].memberId))
         .returning();
 
     if (updatedMenber.length === 0) {

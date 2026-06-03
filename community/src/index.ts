@@ -9,13 +9,23 @@ import { communityMiddleware } from './core/community'
 import { errorHandler } from './core/error'
 
 import { apiv0Router } from './api_v0/router'
+import { authRouter } from './auth/router'
 
 const app = new OpenAPIHono<AppContext>()
 
-  .use('*', cors())
-  .use('*', dbMiddleware)
-  .use('*', communityMiddleware)
-  .use('/api/*', authMiddleware)
+  // CORSの調整: credentialsを許可し、originを動的に設定可能に
+  .use('*', async (c, next) => {
+    const corsMiddleware = cors({
+      origin: c.env.FRONTEND_URL || 'http://localhost:3000',
+      credentials: true,
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+    })
+    return corsMiddleware(c, next)
+  })
+  .use('/api/*', dbMiddleware)
+  .use('/api/*', communityMiddleware)
+  .use('/api/v0/*', authMiddleware)
   
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc', (c: any): Response => {
@@ -29,6 +39,7 @@ const app = new OpenAPIHono<AppContext>()
     }));
   })
   .use('/ui', swaggerUI({ url: '/doc' }))
+  .route('/api/auth', authRouter)
   .route('/api/v0', apiv0Router)
 
   .onError(errorHandler)

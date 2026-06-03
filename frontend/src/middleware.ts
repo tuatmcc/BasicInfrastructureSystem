@@ -1,51 +1,50 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+  const pathname = request.nextUrl.pathname
+  const isLoginPage = pathname === '/login'
+  const isPublicAsset = pathname.match(/\.(.*)$/)
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  if (isPublicAsset) return NextResponse.next()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // DEBUG: すべてのクッキーを出力
+  const allCookies = request.cookies.getAll().map(c => c.name)
+  console.log(`[Middleware Debug] Path: ${pathname}, Cookies: ${allCookies.join(', ')}`)
 
-  const isLoginPage = request.nextUrl.pathname === '/login'
-  const isAuthCallback = request.nextUrl.pathname.startsWith('/auth')
-  const isPublicAsset = request.nextUrl.pathname.match(/\.(.*)$/)
+  // Better Auth uses session_token, but we use app-authorization (JWT)
+  const token = request.cookies.get('app-authorization')
 
-  if (!user && !isLoginPage && !isAuthCallback && !isPublicAsset) {
+  if (!token && !isLoginPage) {
+    console.log(`[Middleware] No custom JWT token found. Redirecting to /login.`)
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isLoginPage) {
+  if (token && isLoginPage) {
+    console.log(`[Middleware] Token found. Redirecting from login to home.`)
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  return response
+  // Admin check
+  if (token && pathname.startsWith('/event')) {
+    try {
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+          throw new Error('[Middleware] Configuration error: JWT_SECRET environment variable is missing.');
+        }
+
+        const { jwtVerify } = await import('jose')
+        const secret = new TextEncoder().encode(jwtSecret)
+        const { payload } = await jwtVerify(token.value, secret)
+        if (payload.role !== 'admin') {
+          return NextResponse.redirect(new URL('/', request.url))
+        }
+    } catch (error) {
+        console.error('[Middleware] Admin check error:', error)
+        return NextResponse.redirect(new URL('/login', request.url))
+    }
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
