@@ -16,7 +16,7 @@ const app = new OpenAPIHono<AppContext>()
   .use('*', async (c, next) => {
     // フロントエンドからのリクエストに対してCookieを許可する
     const corsMiddleware = cors({
-      origin: 'http://localhost:3000', // 必要に応じて環境変数から取得
+      origin: c.env.FRONTEND_URL || 'http://localhost:3000', // 必要に応じて環境変数から取得
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization'],
@@ -25,6 +25,7 @@ const app = new OpenAPIHono<AppContext>()
   })
   .use('*',dbMiddleware)
   .use('/api/*',authMiddleware)
+  .use('/menber/*',authMiddleware)
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc',(c: any): Response => {
     return c.json((app as OpenAPIHono).getOpenAPI31Document({
@@ -37,7 +38,7 @@ const app = new OpenAPIHono<AppContext>()
     }));
   })
   .use('/ui', swaggerUI({ url: '/doc' }))
-  .route('/api/menber', userRouter)
+  .route('/menber', userRouter)
   .route('/api/grade', gradeRouter)
 
   .onError(errorHandler)
