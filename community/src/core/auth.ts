@@ -15,6 +15,20 @@ export type appUser = {
 }
 
 export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
+  if (c.env.NODE_ENV === 'development') {
+    // For development purposes, you might want to set a mock user
+    c.set('appUser', {
+      id: 'dev-user-id',
+      discordid: null,
+      name: 'Dev User',
+      displayName: 'Dev User',
+      role: 'admin'
+    });
+    console.warn("[Auth Middleware] Running in development mode. Mock user has been set.");
+    await next();
+    return;
+  }
+
   // Authorizationヘッダーか、Cookie 'app-authorization' からJWTを取得
   const authHeader = c.req.header('Authorization');
   let token: string | undefined;

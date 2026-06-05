@@ -24,14 +24,16 @@ export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = a
     const appUser = c.get("appUser");
     if (!appUser) return c.json(null, 401);
     const userId = appUser.id;
+    const db = c.get("db");
 
-    const result = await c.get("db").select({
-        ...getTableColumns(members),
-        displayGrade: grades.displayGrade
-    }).from(members)
-    .innerJoin(user,eq(members.memberId,user.memberId))
-    .innerJoin(grades, eq(members.grade, grades.id))
-    .where(eq(user.id,userId));
+    const users = await db.select({ memberId: user.memberId }).from(user).where(eq(user.id, userId)).limit(1);
+
+    if (users.length === 0 || !users[0].memberId) {
+        return c.json(null, 401);
+    }
+
+    const result = await db.select().from(members)
+    .where(eq(members.memberId, users[0].memberId));
 
     if (result.length === 0) {
         return c.json(null, 401); 

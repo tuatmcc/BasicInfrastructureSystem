@@ -1,0 +1,6 @@
+auth api
+middlewareのauthとはべつ
+
+JWTを受け取って、デコード、
+そのユーザーのroleをDBに問い合わせて注入
+新しいJWTを作って返却する
