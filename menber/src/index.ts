@@ -7,8 +7,7 @@ import { dbMiddleware } from './core/db'
 import { authMiddleware } from './core/auth'
 import { errorHandler } from './core/error'
 
-import { userRouter } from './api_v0/menber/router'
-import { gradeRouter } from './api_v0/grade/router'
+import { apiv0Router } from './api_v0/router'
 
 const app = new OpenAPIHono<AppContext>()
 
@@ -25,7 +24,6 @@ const app = new OpenAPIHono<AppContext>()
   })
   .use('*',dbMiddleware)
   .use('/api/*',authMiddleware)
-  .use('/menber/*',authMiddleware)
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))
   .get('doc',(c: any): Response => {
     return c.json((app as OpenAPIHono).getOpenAPI31Document({
@@ -38,8 +36,7 @@ const app = new OpenAPIHono<AppContext>()
     }));
   })
   .use('/ui', swaggerUI({ url: '/doc' }))
-  .route('/menber', userRouter)
-  .route('/api/grade', gradeRouter)
+  .route('/api/v0', apiv0Router)
 
   .onError(errorHandler)
   

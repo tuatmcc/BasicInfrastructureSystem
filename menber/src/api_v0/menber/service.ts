@@ -4,10 +4,11 @@ import { createMenberRoute,
     getMenberRoute, 
     updateMenberRoute,
     updateMenberByIdRoute,
-    deleteMenberRoute
+    deleteMenberRoute,
+    getMembersByIdsRoute
  } from "./schema";
 import { members, user, grades } from "../../../../share/drizzle/schema";
-import { eq, sql, getTableColumns } from "drizzle-orm";
+import { eq, sql, getTableColumns, inArray } from "drizzle-orm";
 
 export const createMenberService:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
@@ -107,3 +108,39 @@ export const deleteMenberService:RouteHandler<typeof deleteMenberRoute,AppContex
 
     return c.body(null, 204);
 };
+
+export const getMembersByIdsService: RouteHandler<typeof getMembersByIdsRoute, AppContext> = async (c) => {
+    const appUser = c.get("appUser");
+    if (!appUser) return c.json(null, 401);
+    if ("admin" !== appUser.role) {
+        return c.json(null, 403);
+    }
+
+    const { ids } = c.req.valid("json");
+    const idList = ids.map(val => val.trim()).filter(val => val !== "");
+
+    if (idList.length === 0) {
+        return c.json([], 200);
+    }
+
+    const db = c.get("db");
+    const result = await db.select({
+        name: members.name,
+        grade: members.grade,
+        emergencyContact: members.emergencyContact,
+        studentId: members.studentId,
+        studentEmail: members.studentEmail,
+        insurance: members.insurance,
+        someAllergy: members.someAllergy,
+        createdAt: members.createdAt,
+        updatedAt: members.updatedAt,
+        memberId: members.memberId,
+        displayGrade: grades.displayGrade,
+    }).from(members)
+    .leftJoin(grades, eq(members.grade, grades.id))
+    .where(inArray(members.memberId, idList));
+
+    return c.json(result, 200);
+};
+
+

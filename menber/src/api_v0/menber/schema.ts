@@ -47,7 +47,7 @@ export const createMenberRoute = createRoute({
 // read 
 export const getMenberRoute = createRoute({
     method: 'get',
-    path: '/',
+    path: '/me',
     responses: {
         200: {
             description: '自身のユーザー情報の取得に成功',
@@ -120,7 +120,7 @@ export const getMenberRoute = createRoute({
 // 自分自身の情報の更新
 export const updateMenberRoute = createRoute({
     method: 'put',
-    path: '/',
+    path: '/me',
     request: {
         body: {
             content: {
@@ -203,6 +203,46 @@ export const deleteMenberRoute = createRoute({
         },
         404: {
             description: 'ユーザーが見つからない',
+        },
+    },
+})
+
+
+// 特定のIDリストに基づくメンバー情報の取得（バッチ取得） admin のみ
+export const getMembersByIdsRoute = createRoute({
+    method: 'post',
+    path: '/by-ids',
+    request: {
+        body: {
+            content: {
+                'application/json': {
+                    schema: z.object({
+                        ids: z.array(z.string()).openapi({ 
+                            description: 'メンバーIDの配列', 
+                            example: ['uuid-1', 'uuid-2'] 
+                        })
+                    })
+                }
+            }
+        }
+    },
+    responses: {
+        200: {
+            description: '指定されたメンバー情報の取得に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema.array(),
+                },
+            },
+        },
+        400: {
+            description: 'リクエストボディが不正',
+        },
+        401: {
+            description: '認証エラー',
+        },
+        403: {
+            description: '権限がありません',
         },
     },
 })

@@ -8,7 +8,8 @@ import {
     // getMenbersByConditionService,
     updateMenberService,
     updateMenberByIdService,
-    deleteMenberService 
+    deleteMenberService,
+    getMembersByIdsService
 } from "./service";
 
 import {
@@ -18,7 +19,8 @@ import {
     // getMenbersByConditionRoute,
     updateMenberRoute,
     updateMenberByIdRoute,
-    deleteMenberRoute
+    deleteMenberRoute,
+    getMembersByIdsRoute
 } from "./schema"
 
 // ***** users *****
@@ -39,5 +41,6 @@ export const userRouter = new OpenAPIHono<AppContext>()
     // .openapi(getMenbersByConditionRoute, getMenbersByConditionService)
     .openapi(updateMenberByIdRoute, updateMenberByIdService)
     .openapi(deleteMenberRoute, deleteMenberService)
+    .openapi(getMembersByIdsRoute, getMembersByIdsService)
 
 
