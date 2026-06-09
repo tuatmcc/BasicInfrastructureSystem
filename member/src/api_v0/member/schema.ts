@@ -8,7 +8,7 @@ export const MemberSchema = createSelectSchema(members).extend({
     displayGrade: z.string().optional().openapi({ example: 'B1' })
 }).openapi("Member")
 
-export const CreateMenberSchema = createInsertSchema(members).omit({memberId:true ,createdAt:true,updatedAt:true}).openapi("CreateMenber");
+export const CreateMemberSchema = createInsertSchema(members).omit({memberId:true ,createdAt:true,updatedAt:true}).openapi("CreateMember");
 
 
 export const UpdateMemberSchema = createUpdateSchema(members).partial().openapi("UpdateMemberRequest")
@@ -16,14 +16,14 @@ export const UpdateMemberSchema = createUpdateSchema(members).partial().openapi(
 
 // create
 // admin のみ
-export const createMenberRoute = createRoute({
+export const createMemberRoute = createRoute({
     method: 'post',
     path: '/',
     request:{
         body:{
             content:{
                 "application/json":{
-                    schema: CreateMenberSchema
+                    schema: CreateMemberSchema
                 }
             }
         }
@@ -45,9 +45,9 @@ export const createMenberRoute = createRoute({
 
 
 // read 
-export const getMenberRoute = createRoute({
+export const getMemberRoute = createRoute({
     method: 'get',
-    path: '/',
+    path: '/me',
     responses: {
         200: {
             description: '自身のユーザー情報の取得に成功',
@@ -65,7 +65,7 @@ export const getMenberRoute = createRoute({
 
 // // admin のみ 
 // // id での取得
-// export const getMenbersByIdRoute = createRoute({
+// export const getMembersByIdRoute = createRoute({
 //     method: 'get',
 //     path: '/',
 //     request: {
@@ -92,7 +92,7 @@ export const getMenberRoute = createRoute({
 // })
 
 // // 条件付き一括取得　admin のみ
-// export const getMenbersByConditionRoute = createRoute({
+// export const getMembersByConditionRoute = createRoute({
 //     method: 'get',
 //     path: '/',
 //     request: {
@@ -118,9 +118,9 @@ export const getMenberRoute = createRoute({
 
 // update
 // 自分自身の情報の更新
-export const updateMenberRoute = createRoute({
+export const updateMemberRoute = createRoute({
     method: 'put',
-    path: '/',
+    path: '/me',
     request: {
         body: {
             content: {
@@ -149,7 +149,7 @@ export const updateMenberRoute = createRoute({
 })
 
 // admin のみ　id での更新
-export const updateMenberByIdRoute = createRoute({
+export const updateMemberByIdRoute = createRoute({
     method: 'put',
     path:'/:id',
     request: {
@@ -186,7 +186,7 @@ export const updateMenberByIdRoute = createRoute({
 })
 
 // delete (admin only)
-export const deleteMenberRoute = createRoute({
+export const deleteMemberRoute = createRoute({
     method: 'delete',
     path: '/:id',
     request: {
@@ -203,6 +203,46 @@ export const deleteMenberRoute = createRoute({
         },
         404: {
             description: 'ユーザーが見つからない',
+        },
+    },
+})
+
+
+// 特定のIDリストに基づくメンバー情報の取得（バッチ取得） admin のみ
+export const getMembersByIdsRoute = createRoute({
+    method: 'post',
+    path: '/by-ids',
+    request: {
+        body: {
+            content: {
+                'application/json': {
+                    schema: z.object({
+                        ids: z.array(z.string()).openapi({ 
+                            description: 'メンバーIDの配列', 
+                            example: ['uuid-1', 'uuid-2'] 
+                        })
+                    })
+                }
+            }
+        }
+    },
+    responses: {
+        200: {
+            description: '指定されたメンバー情報の取得に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema.array(),
+                },
+            },
+        },
+        400: {
+            description: 'リクエストボディが不正',
+        },
+        401: {
+            description: '認証エラー',
+        },
+        403: {
+            description: '権限がありません',
         },
     },
 })

@@ -20,7 +20,7 @@
 		],
 		"paths": {
 			"@/*": ["./src/*"],
-			"@backend/*": ["../menber/src/*"],
+			"@backend/*": ["../member/src/*"],
 			"@community/*": ["../community/src/*"],
 			"drizzle-orm": ["./node_modules/drizzle-orm"],
 			"drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
@@ -34,6 +34,6 @@
 			"node"
 		]
 	},
-	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts", "../menber/src/**/*.ts"],
+	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts", "../member/src/**/*.ts"],
 	"exclude": ["node_modules"]
 }

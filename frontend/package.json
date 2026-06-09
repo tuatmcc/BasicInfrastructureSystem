@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "cp ../.env .env.local && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -19,6 +19,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.3",
     "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-table": "^8.21.3",
     "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.8.3",

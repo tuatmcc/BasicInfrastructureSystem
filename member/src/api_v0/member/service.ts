@@ -1,26 +1,27 @@
 import { AppContext } from "../../core/types"
 import { RouteHandler } from "@hono/zod-openapi"
-import { createMenberRoute, 
-    getMenberRoute, 
-    updateMenberRoute,
-    updateMenberByIdRoute,
-    deleteMenberRoute
+import { createMemberRoute, 
+    getMemberRoute, 
+    updateMemberRoute,
+    updateMemberByIdRoute,
+    deleteMemberRoute,
+    getMembersByIdsRoute
  } from "./schema";
 import { members, user, grades } from "../../../../share/drizzle/schema";
-import { eq, sql, getTableColumns } from "drizzle-orm";
+import { eq, sql, getTableColumns, inArray } from "drizzle-orm";
 
-export const createMenberService:RouteHandler<typeof createMenberRoute,AppContext> = async (c) => {
+export const createMemberService:RouteHandler<typeof createMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser || "admin" !== appUser.role) {
         return c.json(null, 403);
     }
 
-    const createdMenber = await c.get("db").insert(members).values(c.req.valid("json")).returning();
+    const createdMember = await c.get("db").insert(members).values(c.req.valid("json")).returning();
 
-    return c.json(createdMenber[0], 201);
+    return c.json(createdMember[0], 201);
 };
 
-export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = async (c) => {
+export const getMemberService:RouteHandler<typeof getMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser) return c.json(null, 401);
     const userId = appUser.id;
@@ -42,7 +43,7 @@ export const getMenberService:RouteHandler<typeof getMenberRoute,AppContext> = a
     return c.json(result[0], 200);
 };
 
-export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContext> = async (c) => {
+export const updateMemberService:RouteHandler<typeof updateMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser) return c.json(null, 401);
     const userId = appUser.id;
@@ -54,7 +55,7 @@ export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContex
         return c.json(null, 401);
     }
 
-    const updatedMenber = await db.update(members)
+    const updatedMember = await db.update(members)
         .set({
             ...c.req.valid("json"),
             updatedAt: sql`now()`
@@ -62,14 +63,14 @@ export const updateMenberService:RouteHandler<typeof updateMenberRoute,AppContex
         .where(eq(members.memberId, users[0].memberId))
         .returning();
 
-    if (updatedMenber.length === 0) {
+    if (updatedMember.length === 0) {
         return c.json(null, 401);
     }
 
-    return c.json(updatedMenber[0], 200);
+    return c.json(updatedMember[0], 200);
 };
 
-export const updateMenberByIdService:RouteHandler<typeof updateMenberByIdRoute,AppContext>  = async (c) => {
+export const updateMemberByIdService:RouteHandler<typeof updateMemberByIdRoute,AppContext>  = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser || "admin" !== appUser.role) {
         return c.json(null, 403);
@@ -92,7 +93,7 @@ export const updateMenberByIdService:RouteHandler<typeof updateMenberByIdRoute,A
     return c.json(updated[0], 200);
 }
 
-export const deleteMenberService:RouteHandler<typeof deleteMenberRoute,AppContext>  = async (c) => {
+export const deleteMemberService:RouteHandler<typeof deleteMemberRoute,AppContext>  = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser || "admin" !== appUser.role) {
         return c.json(null, 403);
@@ -107,3 +108,38 @@ export const deleteMenberService:RouteHandler<typeof deleteMenberRoute,AppContex
 
     return c.body(null, 204);
 };
+
+export const getMembersByIdsService: RouteHandler<typeof getMembersByIdsRoute, AppContext> = async (c) => {
+    const appUser = c.get("appUser");
+    if (!appUser) return c.json(null, 401);
+    if ("admin" !== appUser.role) {
+        return c.json(null, 403);
+    }
+
+    const { ids } = c.req.valid("json");
+    const idList = ids.map(val => val.trim()).filter(val => val !== "");
+
+    const db = c.get("db");
+    const query = db.select({
+        name: members.name,
+        grade: members.grade,
+        emergencyContact: members.emergencyContact,
+        studentId: members.studentId,
+        studentEmail: members.studentEmail,
+        insurance: members.insurance,
+        someAllergy: members.someAllergy,
+        createdAt: members.createdAt,
+        updatedAt: members.updatedAt,
+        memberId: members.memberId,
+        displayGrade: grades.displayGrade,
+    }).from(members)
+    .leftJoin(grades, eq(members.grade, grades.id));
+
+    const result = idList.length > 0
+        ? await query.where(inArray(members.memberId, idList))
+        : await query;
+
+    return c.json(result, 200);
+};
+
+

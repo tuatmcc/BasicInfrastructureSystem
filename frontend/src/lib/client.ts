@@ -1,7 +1,7 @@
 import { hc } from 'hono/client'
 import type { App as MemberApp } from '@backend/index'
 import type { App as CommunityApp } from '@community/index'
-import { createClient } from './supabase'
+
 
 const getHeaders = async () => {
   const headers: Record<string, string> = {}
@@ -21,14 +21,14 @@ const getHeaders = async () => {
 export const getMemberClient = (baseUrl?: string) => {
   return hc<MemberApp>(baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8788', {
     headers: getHeaders,
-    fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
+    fetch: (url: string | URL | Request, options?: RequestInit) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
   })
 }
 
 export const getCommunityClient = (baseUrl?: string) => {
   return hc<CommunityApp>(baseUrl || process.env.NEXT_PUBLIC_COMMUNITY_API_URL || 'http://localhost:8787', {
     headers: getHeaders,
-    fetch: (url, options) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
+    fetch: (url: string | URL | Request, options?: RequestInit) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
   })
 }
 

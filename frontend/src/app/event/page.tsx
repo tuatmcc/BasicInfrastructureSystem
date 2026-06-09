@@ -1,8 +1,9 @@
 export default function EventPage(){
-    return
+    return(
         <div>
-            イベント一覧
-            adminのみ
+            <p>イベント一覧</p>
+            <p>adminのみ</p>
         </div>
+    )
 }
 
