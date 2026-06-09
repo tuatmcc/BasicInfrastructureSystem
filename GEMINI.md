@@ -5,8 +5,8 @@ This project is a monorepo designed for a basic infrastructure system, utilizing
 
 ### Architecture
 - **Frontend (`/frontend`)**: A Next.js application (v16+) deployed using OpenNext on Cloudflare.
-- **Community API (`/comunity`)**: A Cloudflare Workers service providing community-related features. Built with Hono and Zod OpenAPI.
-- **Member API (`/menber`)**: A Cloudflare Workers service (internally named `backend` in configuration) providing member-related features. Built with Hono and Zod OpenAPI.
+- **Community API (`/community`)**: A Cloudflare Workers service providing community-related features. Built with Hono and Zod OpenAPI.
+- **Member API (`/member`)**: A Cloudflare Workers service (internally named `backend` in configuration) providing member-related features. Built with Hono and Zod OpenAPI.
 - **Shared (`/share`)**: Placeholder for shared code and assets across the monorepo.
 
 ### Core Technologies
@@ -29,10 +29,10 @@ Most sub-projects follow standard npm scripts:
 | Directory | Dev Command | Deploy Command |
 | :--- | :--- | :--- |
 | `frontend/` | `npm run dev` | `npm run deploy` |
-| `comunity/` | `npm run dev` | `npm run deploy` |
-| `menber/` | `npm run dev` | `npm run deploy` |
+| `community/` | `npm run dev` | `npm run deploy` |
+| `member/` | `npm run dev` | `npm run deploy` |
 
-*Note: `menber/` might refer to itself as `backend` in `package.json` and `wrangler.jsonc`.*
+*Note: `member/` might refer to itself as `backend` in `package.json` and `wrangler.jsonc`.*
 
 ### Database & Auth
 - **Database**: Integration is currently in progress. Middlewares exist in `core/db.ts` but the client is not yet initialized.
@@ -42,7 +42,7 @@ Most sub-projects follow standard npm scripts:
 
 ## Development Conventions
 
-### API Structure (comunity & menber)
+### API Structure (community & member)
 Each API module should follow this structure within its `api_v0/` or `features/` directory:
 - `router.ts`: Defines routes and integrates with Hono.
 - `schema.ts`: Defines Zod schemas for request/response validation and OpenAPI documentation.

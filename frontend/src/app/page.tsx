@@ -15,7 +15,7 @@ export default function DashboardPage() {
     setExportError(null)
     setExportSuccess(false)
     try {
-      const res = await client.api.v0.menber["by-ids"].$post({
+      const res = await client.api.v0.member["by-ids"].$post({
         json: {
           ids: [member.memberId]
         }
@@ -76,7 +76,7 @@ export default function DashboardPage() {
   const { data: member, isLoading: isMemberLoading, error } = useQuery({
     queryKey: ['member'],
     queryFn: async () => {
-      const res = await client.api.v0.menber.me.$get()
+      const res = await client.api.v0.member.me.$get()
       if (!res.ok) {
         throw new Error(`API Error: ${res.status}`)
       }
