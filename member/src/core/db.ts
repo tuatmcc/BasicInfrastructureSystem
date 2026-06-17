@@ -2,15 +2,29 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { drizzle } from 'drizzle-orm/node-postgres'
+import { Client } from 'pg'
 
 export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
-  if (!c.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set')
+  const connectionString = c.env.HYPERDRIVE?.connectionString || c.env.DATABASE_URL
+
+  if (!connectionString) {
+    throw new Error('Database connection string (DATABASE_URL or HYPERDRIVE) is not set')
   }
 
-  const db = drizzle(c.env.DATABASE_URL)
+  const client = new Client({ 
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  })
+  await client.connect()
 
+  const db = drizzle(client)
   c.set('db', db)
 
-  await next()
+  try {
+    await next()
+  } finally {
+    c.executionCtx.waitUntil(client.end())
+  }
 }

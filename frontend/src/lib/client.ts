@@ -19,7 +19,7 @@ const getHeaders = async () => {
 }
 
 export const getMemberClient = (baseUrl?: string) => {
-  return hc<MemberApp>(baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8788', {
+  return hc<MemberApp>(baseUrl || process.env.NEXT_PUBLIC_MEMBER_API_URL || 'http://localhost:8788', {
     headers: getHeaders,
     fetch: (url: string | URL | Request, options?: RequestInit) => fetch(url, { ...options, credentials: 'include' }) // Cookieを送信するために追加
   })
