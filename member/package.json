@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "member",
   "type": "module",
   "scripts": {
     "dev": "cp ../.env .dev.vars && wrangler dev",

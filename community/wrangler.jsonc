@@ -22,7 +22,7 @@
 		"drizzle-orm": "./node_modules/drizzle-orm",
 		"drizzle-orm/pg-core": "./node_modules/drizzle-orm/pg-core",
 		"drizzle-orm/relations": "./node_modules/drizzle-orm/relations"
-	}
+	},
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -46,4 +46,15 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+	/**
+	 * Hyperdrive Bindings
+	 * https://developers.cloudflare.com/workers/configuration/hyperdrive/
+	 */
+	"hyperdrive": [
+	  {
+	    "binding": "HYPERDRIVE",
+	    "id": "9fdd8328502e4698ae4433453a49acd3",
+	    "localConnectionString": "postgresql://postgres:BasicInfrastructureSystem@db.iahinzkjkxexabjegbtw.supabase.co:5432/postgres"
+	  }
+	]
 }

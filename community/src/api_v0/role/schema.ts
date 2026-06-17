@@ -1,3 +1,10 @@
+import { z } from "@hono/zod-openapi"
+
+export const roleSchema = z.object({
+    roleId: z.string().openapi({ example: "1450087368114704484" }),
+    roleName: z.string().openapi({ example: "Admin" })
+}).openapi("Role")
+
 // import { z, createRoute } from "@hono/zod-openapi"
 // import { roles } from "../../../../share/drizzle/schema"
 // import { createSelectSchema, createInsertSchema } from "drizzle-zod"

@@ -17,6 +17,7 @@ export type CloudflareBindings = {
   DISCORD_CLIENT_ID: string
   DISCORD_CLIENT_SECRET: string
   NODE_ENV: 'development' | 'production' | null
+  HYPERDRIVE?: any
 }
 
 export type AppContext = {
