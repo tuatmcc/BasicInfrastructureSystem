@@ -94,8 +94,8 @@ npm run deploy
 ```
 *デプロイ後、Cloudflare ダッシュボードに表示される Workers の本番 URL をメモします。*
 
-#### Step 2: API 側へのシークレット・環境変数の登録
-Wrangler を使用して、本番 API Worker に環境変数を安全に登録します。
+#### Step 2: API 側へのシークレット・環境変数の登録（初回、または設定変更時のみ）
+Wrangler を使用して、本番 API Worker に環境変数を安全に登録します。一度登録すれば Cloudflare 側に暗号化されて永続化されるため、コードを再デプロイ（`wrangler deploy`）しても消えません。毎回のデプロイ時に実行する必要はありません。
 ```bash
 # community と member それぞれのディレクトリで実行
 npx wrangler secret put FRONTEND_URL    # 値: https://mypage.yourdomain.com (本番フロントURL)
