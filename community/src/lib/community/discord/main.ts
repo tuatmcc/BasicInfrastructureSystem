@@ -1,6 +1,7 @@
 import type { CommunityProvider } from '../interface';
-import type { Role } from '../type';
+import type { Role, SendMessageInput, SendMessageResult } from '../type';
 import { listUserRolesAPI } from './role';
+import { sendMessageAPI } from './message';
 
 export class DiscordProvider implements CommunityProvider {
   private readonly API_BASE = 'https://discord.com/api/v10';
@@ -31,5 +32,9 @@ export class DiscordProvider implements CommunityProvider {
 
   async listUserRoles(userId: string): Promise<Role[]> {
     return listUserRolesAPI(this, userId);
+  }
+
+  async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
+    return sendMessageAPI(this, input);
   }
 }

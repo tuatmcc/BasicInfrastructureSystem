@@ -1,24 +1,23 @@
-import type { Context } from "hono"
+import { RouteHandler } from "@hono/zod-openapi"
 import { AppContext } from "../../core/types"
+import { createMessageRoute } from "./schema"
 
 // ***** message *****
-// メッセージ投稿のビジネスロジック
-// ユーザーからのメッセージを受け取り、保存処理を行います
+// イベント通知メッセージ送信のビジネスロジック
+// リクエストを受け取り、Discord 操作（community プロバイダ）へ委譲します
 // *****************
 
-const mockMessage = {
-    id: "msg-123",
-    channelId: "channel-123",
-    userId: "user-123",
-    content: "Hello, World!",
-    created_at: "2024-01-01T12:00:00Z",
-    updated_at: "2024-01-02T12:00:00Z",
-};
-
 // create
-// メッセージを新規作成する
-export const createMessageService = async (c: Context<AppContext>) => {
-    const user = c.get("appUser");
-    const body = await c.req.json();
-    return c.json({ ...mockMessage, userId: user.id, ...body }, 201);
+// イベント通知メッセージを Discord へ送信し、メッセージIDを返す
+export const createMessageService: RouteHandler<typeof createMessageRoute, AppContext> = async (c) => {
+    const body = c.req.valid("json");
+    const community = c.get("community");
+
+    const result = await community.sendMessage({
+        channelId: body.channelId,
+        content: body.content,
+        mentionRoleIds: body.mentionRoleIds,
+    });
+
+    return c.json(result, 201);
 };
