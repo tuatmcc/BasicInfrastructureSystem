@@ -2,8 +2,19 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { drizzle } from 'drizzle-orm/node-postgres'
-import { sql } from 'drizzle-orm'
 import { Client } from 'pg'
+
+const resetRlsSession = async (client: Client) => {
+  await client.query('reset role')
+  await client.query('reset all')
+  await client.query('set role app_rls')
+  await client.query(`
+    select
+      set_config('app.current_user_id', '', false),
+      set_config('app.current_member_id', '', false),
+      set_config('app.current_user_role', '', false)
+  `)
+}
 
 export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
   const connectionString = c.env.HYPERDRIVE?.connectionString || c.env.DATABASE_URL
@@ -19,7 +30,7 @@ export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
     }
   })
   await client.connect()
-  await client.query('set role app_rls')
+  await resetRlsSession(client)
 
   const db = drizzle(client)
   c.set('db', db)
@@ -28,17 +39,13 @@ export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
     await next()
   } finally {
     try {
-      await db.execute(sql`
-        select
-          set_config('app.current_user_id', '', false),
-          set_config('app.current_member_id', '', false),
-          set_config('app.current_user_role', '', false)
-      `)
+      await resetRlsSession(client)
     } catch (error) {
       console.error('[DB Middleware] Failed to reset RLS settings:', error)
     }
     try {
       await client.query('reset role')
+      await client.query('reset all')
     } catch (error) {
       console.error('[DB Middleware] Failed to reset database role:', error)
     }
