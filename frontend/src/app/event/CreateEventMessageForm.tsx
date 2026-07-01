@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { communityClient } from '@/lib/client';
+import { buildEventDetailHref } from './eventUtils';
 
 export default function CreateEventMessageForm() {
   const [channelId, setChannelId] = useState('');
@@ -36,7 +37,7 @@ export default function CreateEventMessageForm() {
       }
 
       const eventMessage = await res.json();
-      window.location.href = `/event/${eventMessage.id}`;
+      window.location.href = buildEventDetailHref(eventMessage.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : '送信に失敗しました。');
     } finally {

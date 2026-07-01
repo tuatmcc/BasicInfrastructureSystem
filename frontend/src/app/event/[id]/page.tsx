@@ -2,16 +2,11 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { communityClient } from '@/lib/client';
 import MemberTable, { ReactionMemberRow } from './MemberTable';
+import { buildEventDetailViewModel } from './detailUtils';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
-
-const formatDate = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-};
 
 export default async function EventDetailPage({ params }: PageProps) {
   const { id } = await params;
@@ -42,35 +37,12 @@ export default async function EventDetailPage({ params }: PageProps) {
       fetchError = `リアクション集計の取得に失敗しました: ${res.status}`;
     } else {
       const summary = await res.json();
-      eventTitle = `イベント通知メッセージ (${summary.eventMessage.messageId})`;
-      eventContent = summary.eventMessage.content;
-      eventDate = formatDate(summary.eventMessage.createdAt);
-      reactionBadges = summary.reactions.map((reaction) => ({
-        emoji: reaction.emoji,
-        count: reaction.count,
-        names: reaction.users.map((user) =>
-          user.memberName ||
-          user.displayName ||
-          user.discordGlobalName ||
-          user.discordUsername
-        ),
-      }));
-      membersWithReactions = summary.members.map((member) => ({
-        name: member.memberName || member.displayName || member.discordGlobalName || member.discordUsername,
-        displayGrade: member.displayGrade,
-        studentId: member.studentId,
-        studentEmail: member.studentEmail,
-        emergencyContact: member.emergencyContact,
-        insurance: member.insurance,
-        someAllergy: member.someAllergy,
-        memberId: member.memberId,
-        discordUserId: member.discordUserId,
-        discordUsername: member.discordUsername,
-        discordGlobalName: member.discordGlobalName,
-        userId: member.userId,
-        email: member.email,
-        reactions: member.reactions,
-      }));
+      const viewModel = buildEventDetailViewModel(summary);
+      eventTitle = viewModel.eventTitle;
+      eventContent = viewModel.eventContent;
+      eventDate = viewModel.eventDate;
+      reactionBadges = viewModel.reactionBadges;
+      membersWithReactions = viewModel.membersWithReactions;
     }
   } catch (err) {
     console.error('Error fetching event reactions:', err);

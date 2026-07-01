@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { communityClient } from '@/lib/client';
 import CreateEventMessageForm from './CreateEventMessageForm';
+import { buildEventDetailHref, getEventMessageTitle } from './eventUtils';
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -67,13 +68,13 @@ export default async function EventPage() {
                 {messages.map((message) => (
                   <Link
                     key={message.id}
-                    href={`/event/${message.id}`}
+                    href={buildEventDetailHref(message.id)}
                     className="block p-5 hover:bg-slate-50 dark:hover:bg-zinc-800/60 transition-colors"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-semibold text-slate-950 dark:text-white truncate">
-                          {message.content.split('\n')[0] || 'イベント通知メッセージ'}
+                          {getEventMessageTitle(message.content)}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
                           Message: {message.messageId} / Channel: {message.channelId}
