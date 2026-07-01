@@ -2,6 +2,7 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { drizzle } from 'drizzle-orm/node-postgres'
+import { sql } from 'drizzle-orm'
 import { Client } from 'pg'
 
 export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
@@ -18,6 +19,7 @@ export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
     }
   })
   await client.connect()
+  await client.query('set role app_rls')
 
   const db = drizzle(client)
   c.set('db', db)
@@ -25,6 +27,21 @@ export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
   try {
     await next()
   } finally {
+    try {
+      await db.execute(sql`
+        select
+          set_config('app.current_user_id', '', false),
+          set_config('app.current_member_id', '', false),
+          set_config('app.current_user_role', '', false)
+      `)
+    } catch (error) {
+      console.error('[DB Middleware] Failed to reset RLS settings:', error)
+    }
+    try {
+      await client.query('reset role')
+    } catch (error) {
+      console.error('[DB Middleware] Failed to reset database role:', error)
+    }
     c.executionCtx.waitUntil(client.end())
   }
 }

@@ -29,17 +29,7 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
     }
 
     const db = c.get("db");
-    const [currentUser] = await db
-        .select({ memberId: user.memberId })
-        .from(user)
-        .where(eq(user.id, appUser.id))
-        .limit(1);
-
-    if (!currentUser) {
-        return c.json({ error: "User not found" }, 401);
-    }
-
-    if (currentUser.memberId) {
+    if (appUser.memberId) {
         return c.json({ error: "Already joined" }, 409);
     }
 
@@ -66,17 +56,14 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
 export const getMemberService:RouteHandler<typeof getMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser) return c.json(null, 401);
-    const userId = appUser.id;
     const db = c.get("db");
 
-    const users = await db.select({ memberId: user.memberId }).from(user).where(eq(user.id, userId)).limit(1);
-
-    if (users.length === 0 || !users[0].memberId) {
+    if (!appUser.memberId) {
         return c.json(null, 401);
     }
 
     const result = await db.select().from(members)
-    .where(eq(members.memberId, users[0].memberId));
+    .where(eq(members.memberId, appUser.memberId));
 
     if (result.length === 0) {
         return c.json(null, 401); 
@@ -88,12 +75,9 @@ export const getMemberService:RouteHandler<typeof getMemberRoute,AppContext> = a
 export const updateMemberService:RouteHandler<typeof updateMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
     if (!appUser) return c.json(null, 401);
-    const userId = appUser.id;
     const db = c.get("db");
 
-    const users = await db.select({ memberId: user.memberId }).from(user).where(eq(user.id, userId)).limit(1);
-    
-    if (users.length === 0 || !users[0].memberId) {
+    if (!appUser.memberId) {
         return c.json(null, 401);
     }
 
@@ -102,7 +86,7 @@ export const updateMemberService:RouteHandler<typeof updateMemberRoute,AppContex
             ...c.req.valid("json"),
             updatedAt: sql`now()`
         })
-        .where(eq(members.memberId, users[0].memberId))
+        .where(eq(members.memberId, appUser.memberId))
         .returning();
 
     if (updatedMember.length === 0) {
@@ -183,4 +167,3 @@ export const getMembersByIdsService: RouteHandler<typeof getMembersByIdsRoute, A
 
     return c.json(result, 200);
 };
-

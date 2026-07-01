@@ -1,6 +1,8 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { verify } from 'hono/jwt'
+import { eq, sql } from 'drizzle-orm'
+import { user } from '../../../share/drizzle/schema'
 
 export type authUser = {
   id: string
@@ -11,6 +13,7 @@ export type appUser = {
   discordid: string | null
   name: string
   displayName: string
+  memberId: string | null
   role: 'admin' | 'user'
 }
 
@@ -22,6 +25,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
       discordid: null,
       name: 'yufox',
       displayName: 'yufox',
+      memberId: null,
       role: 'admin'
     });
     console.warn("[Auth Middleware] Running in development mode. Mock user has been set.");
@@ -47,14 +51,45 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
   try {
     const payload = await verify(token, c.env.JWT_SECRET, 'HS256');
+    const userId = payload.id;
 
-    // Better Auth user properties mapping
+    if (typeof userId !== 'string' || userId.length === 0) {
+      return c.json({ error: 'Unauthorized: Invalid token subject' }, 401);
+    }
+
+    const [currentUser] = await c.get('db')
+      .select({
+        id: user.id,
+        discordUserId: user.discordUserId,
+        name: user.name,
+        displayName: user.displayName,
+        memberId: user.memberId,
+        role: user.role,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!currentUser) {
+      return c.json({ error: 'Unauthorized: User not found' }, 401);
+    }
+
+    const role = currentUser.role === 'admin' ? 'admin' : 'user';
+
+    await c.get('db').execute(sql`
+      select
+        set_config('app.current_user_id', ${currentUser.id}, false),
+        set_config('app.current_member_id', ${currentUser.memberId ?? ''}, false),
+        set_config('app.current_user_role', ${role}, false)
+    `);
+
     c.set('appUser', {
-      id: payload.id as string,
-      discordid: (payload.discordid as string | null) || null,
-      name: payload.name as string,
-      displayName: (payload.displayName as string) || (payload.name as string),
-      role: (payload.role as 'admin' | 'user') || 'user'
+      id: currentUser.id,
+      discordid: currentUser.discordUserId,
+      name: currentUser.name,
+      displayName: currentUser.displayName || currentUser.name,
+      memberId: currentUser.memberId,
+      role,
     });
 
     await next();
