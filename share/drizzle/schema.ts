@@ -87,5 +87,15 @@ export const members = pgTable("members", {
 			columns: [table.grade],
 			foreignColumns: [grades.id],
 			name: "members_grade_fkey"
-		}).onDelete("set null"),
-]);
+			}).onDelete("set null"),
+	]);
+
+export const eventMessages = pgTable("event_messages", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	channelId: text("channel_id").notNull(),
+	messageId: text("message_id").notNull().unique(),
+	content: text("content").notNull(),
+	createdBy: text("created_by").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});

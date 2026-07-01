@@ -4,8 +4,13 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
   const isPublicAsset = pathname.match(/\.(.*)$/)
+  const isDevelopment = process.env.NODE_ENV === 'development'
 
   if (isPublicAsset) return NextResponse.next()
+
+  if (isDevelopment) {
+    return NextResponse.next()
+  }
 
   // DEBUG: すべてのクッキーを出力
   const allCookies = request.cookies.getAll().map(c => c.name)

@@ -211,6 +211,11 @@ export default function DashboardPage() {
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Links</h3>
               <ul className="space-y-3">
                 <li>
+                  <a href="/event" className="text-blue-600 hover:underline flex items-center">
+                    <span className="mr-2">→</span> Event messages
+                  </a>
+                </li>
+                <li>
                   <a href="#" className="text-blue-600 hover:underline flex items-center">
                     <span className="mr-2">→</span> Update Profile
                   </a>
