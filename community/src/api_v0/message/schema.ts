@@ -44,5 +44,13 @@ export const createMessageRoute = createRoute({
                 },
             },
         },
+        403: {
+            description: "Forbidden",
+            content: {
+                "application/json": {
+                    schema: z.object({ error: z.string() }),
+                },
+            },
+        },
     },
 });

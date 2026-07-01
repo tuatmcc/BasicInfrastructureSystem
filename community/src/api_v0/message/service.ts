@@ -11,7 +11,12 @@ import { createMessageRoute } from "./schema"
 // イベント通知メッセージを Discord へ送信し、メッセージIDを返す
 export const createMessageService: RouteHandler<typeof createMessageRoute, AppContext> = async (c) => {
     const body = c.req.valid("json");
+    const appUser = c.get("appUser");
     const community = c.get("community");
+
+    if (appUser.role !== "admin") {
+        return c.json({ error: "Forbidden" }, 403);
+    }
 
     const result = await community.sendMessage({
         channelId: body.channelId,
