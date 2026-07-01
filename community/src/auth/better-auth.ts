@@ -103,11 +103,13 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             domain: c.env.COOKIE_DOMAIN || undefined,
         });
 
+        const redirectPath = payload.role === 'admin'
+            ? '/'
+            : (session.user as any).memberId ? '/me' : '/join';
         console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id} with role ${payload.role}`);
-        return c.redirect(frontendUrl);
+        return c.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {
         console.error("[JWT Endpoint] Error generating JWT:", error);
         return c.redirect(`${frontendUrl}/login?error=jwt_generation_failed`);
     }
 };
-

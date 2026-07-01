@@ -13,6 +13,10 @@ export const CreateMemberSchema = createInsertSchema(members).omit({memberId:tru
 
 export const UpdateMemberSchema = createUpdateSchema(members).partial().openapi("UpdateMemberRequest")
 
+const ErrorSchema = z.object({
+    error: z.string(),
+}).openapi("ErrorResponse")
+
 
 // create
 // admin のみ
@@ -39,6 +43,48 @@ export const createMemberRoute = createRoute({
         },
         400: {
             description: 'リクエストが不正',
+        },
+    },
+});
+
+// join
+// ログイン済みユーザーが自分自身の部員情報を作成して紐付ける
+export const joinMemberRoute = createRoute({
+    method: 'post',
+    path: '/join',
+    request:{
+        body:{
+            content:{
+                "application/json":{
+                    schema: CreateMemberSchema
+                }
+            }
+        }
+    },
+    responses: {
+        201: {
+            description: '入部に成功',
+            content: {
+                'application/json': {
+                    schema: MemberSchema,
+                },
+            },
+        },
+        401: {
+            description: '認証エラー',
+            content: {
+                'application/json': {
+                    schema: ErrorSchema,
+                },
+            },
+        },
+        409: {
+            description: '既に入部済み',
+            content: {
+                'application/json': {
+                    schema: ErrorSchema,
+                },
+            },
         },
     },
 });
