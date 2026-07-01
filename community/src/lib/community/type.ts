@@ -28,3 +28,35 @@ export const SendMessageResultSchema = z.object({
   messageId: z.string(),
 });
 export type SendMessageResult = z.infer<typeof SendMessageResultSchema>;
+
+export const DiscordMessageAuthorSchema = z.object({
+  id: DiscordSnowflakeSchema,
+  username: z.string(),
+  globalName: z.string().nullable(),
+  bot: z.boolean(),
+});
+export type DiscordMessageAuthor = z.infer<typeof DiscordMessageAuthorSchema>;
+
+export const DiscordMessageReactionSchema = z.object({
+  emoji: z.string(),
+  count: z.number(),
+});
+export type DiscordMessageReaction = z.infer<typeof DiscordMessageReactionSchema>;
+
+export const DiscordMessageSchema = z.object({
+  id: DiscordSnowflakeSchema,
+  channelId: DiscordSnowflakeSchema,
+  content: z.string(),
+  createdAt: z.string(),
+  author: DiscordMessageAuthorSchema,
+  reactions: z.array(DiscordMessageReactionSchema),
+});
+export type DiscordMessage = z.infer<typeof DiscordMessageSchema>;
+
+export const DiscordReactionUserSchema = z.object({
+  id: DiscordSnowflakeSchema,
+  username: z.string(),
+  globalName: z.string().nullable(),
+  bot: z.boolean(),
+});
+export type DiscordReactionUser = z.infer<typeof DiscordReactionUserSchema>;
