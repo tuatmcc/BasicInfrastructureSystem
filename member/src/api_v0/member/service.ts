@@ -2,6 +2,7 @@ import { AppContext } from "../../core/types"
 import { RouteHandler } from "@hono/zod-openapi"
 import { createMemberRoute, 
     getMemberRoute, 
+    joinMemberRoute,
     updateMemberRoute,
     updateMemberByIdRoute,
     deleteMemberRoute,
@@ -19,6 +20,47 @@ export const createMemberService:RouteHandler<typeof createMemberRoute,AppContex
     const createdMember = await c.get("db").insert(members).values(c.req.valid("json")).returning();
 
     return c.json(createdMember[0], 201);
+};
+
+export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext> = async (c) => {
+    const appUser = c.get("appUser");
+    if (!appUser) {
+        return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const db = c.get("db");
+    const [currentUser] = await db
+        .select({ memberId: user.memberId })
+        .from(user)
+        .where(eq(user.id, appUser.id))
+        .limit(1);
+
+    if (!currentUser) {
+        return c.json({ error: "User not found" }, 401);
+    }
+
+    if (currentUser.memberId) {
+        return c.json({ error: "Already joined" }, 409);
+    }
+
+    const [createdMember] = await db.transaction(async (tx) => {
+        const [member] = await tx
+            .insert(members)
+            .values(c.req.valid("json"))
+            .returning();
+
+        await tx
+            .update(user)
+            .set({
+                memberId: member.memberId,
+                updatedAt: new Date(),
+            })
+            .where(eq(user.id, appUser.id));
+
+        return [member];
+    });
+
+    return c.json(createdMember, 201);
 };
 
 export const getMemberService:RouteHandler<typeof getMemberRoute,AppContext> = async (c) => {
@@ -141,5 +183,4 @@ export const getMembersByIdsService: RouteHandler<typeof getMembersByIdsRoute, A
 
     return c.json(result, 200);
 };
-
 

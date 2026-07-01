@@ -29,8 +29,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Admin check
-  if (token && pathname.startsWith('/event')) {
+  // Admin check and default landing split
+  if (token && (pathname.startsWith('/event') || pathname === '/')) {
     try {
         const jwtSecret = process.env.JWT_SECRET;
         if (!jwtSecret) {
@@ -40,8 +40,11 @@ export async function middleware(request: NextRequest) {
         const { jwtVerify } = await import('jose')
         const secret = new TextEncoder().encode(jwtSecret)
         const { payload } = await jwtVerify(token.value, secret)
+        if (pathname === '/' && payload.role !== 'admin') {
+          return NextResponse.redirect(new URL('/me', request.url))
+        }
         if (payload.role !== 'admin') {
-          return NextResponse.redirect(new URL('/', request.url))
+          return NextResponse.redirect(new URL('/me', request.url))
         }
     } catch (error) {
         console.error('[Middleware] Admin check error:', error)

@@ -4,6 +4,7 @@ import type { AppContext } from "../../core/types";
 import { 
     createMemberService,
     getMemberService,
+    joinMemberService,
     // getMembersByIdService,
     // getMembersByConditionService,
     updateMemberService,
@@ -15,6 +16,7 @@ import {
 import {
     createMemberRoute,
     getMemberRoute,
+    joinMemberRoute,
     // getMembersByIdRoute,
     // getMembersByConditionRoute,
     updateMemberRoute,
@@ -36,11 +38,11 @@ import {
 export const userRouter = new OpenAPIHono<AppContext>()
     .openapi(getMemberRoute, getMemberService)
     .openapi(updateMemberRoute, updateMemberService)
+    .openapi(joinMemberRoute, joinMemberService)
     .openapi(createMemberRoute, createMemberService)
     // .openapi(getMembersByIdRoute, getMembersByIdService)
     // .openapi(getMembersByConditionRoute, getMembersByConditionService)
     .openapi(updateMemberByIdRoute, updateMemberByIdService)
     .openapi(deleteMemberRoute, deleteMemberService)
     .openapi(getMembersByIdsRoute, getMembersByIdsService)
-
 
