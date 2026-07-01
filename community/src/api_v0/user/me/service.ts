@@ -23,20 +23,22 @@ export const getUserMeService: RouteHandler<typeof getUserMeRoute, AppContext> =
 };
 
 export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppContext> = async (c) => {
+    const db = c.get("db");
     const appUser = c.get("appUser");
-    
-    // 別のモックデータを返す
-    const mockUpdatedUser = {
-        id: "d83f3347-888a-4b9e-9c99-24ebeadf1b60",
-        discordUserId: "1501602493606662264",
-        displayName: "John Doe",
-        memberId: "ed55db90-f5b1-488d-be10-558c12de30e6",
-        name: "John Doe",
-        email: "john@example.com",
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-    };
+    const body = c.req.valid("json");
 
-    return c.json(mockUpdatedUser as any, 200);
+    const [updatedUser] = await db
+        .update(user)
+        .set({
+            ...body,
+            updatedAt: new Date(),
+        })
+        .where(eq(user.id, appUser.id))
+        .returning();
+
+    if (!updatedUser) {
+        return c.json({ error: "User not found in database" }, 404);
+    }
+
+    return c.json(updatedUser, 200);
 };
