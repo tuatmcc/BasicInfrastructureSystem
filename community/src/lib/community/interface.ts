@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { Role, SendMessageInput, SendMessageResult } from './type';
+import {
+  DiscordMessage,
+  DiscordReactionUser,
+  Role,
+  SendMessageInput,
+  SendMessageResult
+} from './type';
 
 // --- Interface Definition ---
 
@@ -11,4 +17,6 @@ export interface CommunityProvider {
 
 // message
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;
+  getMessage(channelId: string, messageId: string): Promise<DiscordMessage>;
+  listMessageReactionUsers(channelId: string, messageId: string, emoji: string): Promise<DiscordReactionUser[]>;
 }

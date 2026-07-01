@@ -1,8 +1,8 @@
 import type { CommunityProvider } from '../interface';
-import type { Role, SendMessageInput, SendMessageResult } from '../type';
+import type { DiscordMessage, DiscordReactionUser, Role, SendMessageInput, SendMessageResult } from '../type';
 import { CommunityProviderError } from '../error';
 import { listUserRolesAPI } from './role';
-import { sendMessageAPI } from './message';
+import { getMessageAPI, listMessageReactionUsersAPI, sendMessageAPI } from './message';
 
 export class DiscordProvider implements CommunityProvider {
   private readonly API_BASE = 'https://discord.com/api/v10';
@@ -37,5 +37,13 @@ export class DiscordProvider implements CommunityProvider {
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
     return sendMessageAPI(this, input);
+  }
+
+  async getMessage(channelId: string, messageId: string): Promise<DiscordMessage> {
+    return getMessageAPI(this, channelId, messageId);
+  }
+
+  async listMessageReactionUsers(channelId: string, messageId: string, emoji: string): Promise<DiscordReactionUser[]> {
+    return listMessageReactionUsersAPI(this, channelId, messageId, emoji);
   }
 }

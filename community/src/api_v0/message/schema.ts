@@ -29,9 +29,44 @@ export const sendMessageSchema = z.object({
 }).openapi("SendMessageRequest")
 
 // レスポンス: 送信したメッセージのID
-export const messageResultSchema = z.object({
-    messageId: z.string().openapi({ example: "1450087368114704484" }),
-}).openapi("SendMessageResult")
+export const eventMessageSchema = z.object({
+    id: z.string().openapi({ example: "6f6d8266-9e0f-4b7b-94c1-8f97b4c4dc4a" }),
+    channelId: discordSnowflakeSchema,
+    messageId: discordSnowflakeSchema,
+    content: z.string().openapi({ example: "イベントが開始されました！" }),
+    createdBy: z.string().openapi({ example: "user-123" }),
+    createdAt: z.string().openapi({ example: "2026-07-01T12:00:00Z" }),
+    updatedAt: z.string().openapi({ example: "2026-07-01T12:00:00Z" }),
+}).openapi("EventMessage")
+
+export const reactionMemberSchema = z.object({
+    discordUserId: discordSnowflakeSchema,
+    discordUsername: z.string(),
+    discordGlobalName: z.string().nullable(),
+    userId: z.string().nullable(),
+    userName: z.string().nullable(),
+    displayName: z.string().nullable(),
+    email: z.string().nullable(),
+    memberId: z.string().nullable(),
+    memberName: z.string().nullable(),
+    displayGrade: z.string().nullable(),
+    studentId: z.string().nullable(),
+    studentEmail: z.string().nullable(),
+    emergencyContact: z.string().nullable(),
+    insurance: z.boolean().nullable(),
+    someAllergy: z.boolean().nullable(),
+    reactions: z.array(z.string()),
+}).openapi("ReactionMember")
+
+export const messageReactionSummarySchema = z.object({
+    eventMessage: eventMessageSchema,
+    reactions: z.array(z.object({
+        emoji: z.string(),
+        count: z.number(),
+        users: z.array(reactionMemberSchema),
+    })),
+    members: z.array(reactionMemberSchema),
+}).openapi("MessageReactionSummary")
 
 // create
 // イベント通知メッセージを Discord へ送信する
@@ -52,7 +87,7 @@ export const createMessageRoute = createRoute({
             description: "メッセージ送信成功",
             content: {
                 "application/json": {
-                    schema: messageResultSchema,
+                    schema: eventMessageSchema,
                 },
             },
         },
@@ -61,6 +96,105 @@ export const createMessageRoute = createRoute({
             content: {
                 "application/json": {
                     schema: errorSchema,
+                },
+            },
+        },
+        403: {
+            description: "Forbidden",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+        404: {
+            description: "Not Found",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+        502: {
+            description: "Bad Gateway",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+    },
+});
+
+export const listMessagesRoute = createRoute({
+    method: "get",
+    path: "/",
+    responses: {
+        200: {
+            description: "イベント通知メッセージ一覧",
+            content: {
+                "application/json": {
+                    schema: eventMessageSchema.array(),
+                },
+            },
+        },
+        403: {
+            description: "Forbidden",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+    },
+});
+
+export const getMessageRoute = createRoute({
+    method: "get",
+    path: "/:id",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "イベント通知メッセージ詳細",
+            content: {
+                "application/json": {
+                    schema: eventMessageSchema,
+                },
+            },
+        },
+        403: {
+            description: "Forbidden",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+        404: {
+            description: "Not Found",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+    },
+});
+
+export const getMessageReactionsRoute = createRoute({
+    method: "get",
+    path: "/:id/reactions",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: {
+            description: "Discord リアクションユーザー集計",
+            content: {
+                "application/json": {
+                    schema: messageReactionSummarySchema,
                 },
             },
         },
