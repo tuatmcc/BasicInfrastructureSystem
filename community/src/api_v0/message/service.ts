@@ -1,5 +1,6 @@
 import { RouteHandler } from "@hono/zod-openapi"
 import { AppContext } from "../../core/types"
+import { CommunityProviderError } from "../../lib/community/error"
 import { createMessageRoute } from "./schema"
 
 // ***** message *****
@@ -18,11 +19,23 @@ export const createMessageService: RouteHandler<typeof createMessageRoute, AppCo
         return c.json({ error: "Forbidden" }, 403);
     }
 
-    const result = await community.sendMessage({
-        channelId: body.channelId,
-        content: body.content,
-        mentionRoleIds: body.mentionRoleIds,
-    });
+    try {
+        const result = await community.sendMessage({
+            channelId: body.channelId,
+            content: body.content,
+            mentionRoleIds: body.mentionRoleIds,
+        });
 
-    return c.json(result, 201);
+        return c.json(result, 201);
+    } catch (error) {
+        if (error instanceof CommunityProviderError) {
+            if (error.status === 400 || error.status === 403 || error.status === 404) {
+                return c.json({ error: "Discord request failed" }, error.status);
+            }
+
+            return c.json({ error: "Discord service unavailable" }, 502);
+        }
+
+        throw error;
+    }
 };

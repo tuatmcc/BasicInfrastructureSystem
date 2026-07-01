@@ -1,6 +1,14 @@
 import { z } from "@hono/zod-openapi"
 import { createRoute } from "@hono/zod-openapi";
 
+const discordSnowflakeSchema = z.string()
+    .regex(/^\d{17,20}$/)
+    .openapi({ example: "1450087368114704484" });
+
+const errorSchema = z.object({
+    error: z.string(),
+}).openapi("ErrorResponse");
+
 // ***** message *****
 // イベント通知メッセージの管理
 // Discord へイベント通知メッセージを送信します
@@ -9,9 +17,13 @@ import { createRoute } from "@hono/zod-openapi";
 
 // リクエスト: 送信するメッセージ内容とメンションするロールID一覧
 export const sendMessageSchema = z.object({
-    channelId: z.string().openapi({ example: "1450087368114704484" }),
-    content: z.string().openapi({ example: "イベントが開始されました！" }),
-    mentionRoleIds: z.array(z.string())
+    channelId: discordSnowflakeSchema,
+    content: z.string()
+        .min(1)
+        .max(2000)
+        .openapi({ example: "イベントが開始されました！" }),
+    mentionRoleIds: z.array(discordSnowflakeSchema)
+        .max(100)
         .optional()
         .openapi({ example: ["1450087368114704484"] }),
 }).openapi("SendMessageRequest")
@@ -44,11 +56,35 @@ export const createMessageRoute = createRoute({
                 },
             },
         },
+        400: {
+            description: "Bad Request",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
         403: {
             description: "Forbidden",
             content: {
                 "application/json": {
-                    schema: z.object({ error: z.string() }),
+                    schema: errorSchema,
+                },
+            },
+        },
+        404: {
+            description: "Not Found",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
+                },
+            },
+        },
+        502: {
+            description: "Bad Gateway",
+            content: {
+                "application/json": {
+                    schema: errorSchema,
                 },
             },
         },

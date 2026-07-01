@@ -1,5 +1,6 @@
 import type { CommunityProvider } from '../interface';
 import type { Role, SendMessageInput, SendMessageResult } from '../type';
+import { CommunityProviderError } from '../error';
 import { listUserRolesAPI } from './role';
 import { sendMessageAPI } from './message';
 
@@ -23,7 +24,7 @@ export class DiscordProvider implements CommunityProvider {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Discord API Error: ${response.status} ${JSON.stringify(errorData)}`);
+      throw new CommunityProviderError('Discord API Error', response.status, 'discord', errorData);
     }
 
     if (response.status === 204) return undefined as T;
