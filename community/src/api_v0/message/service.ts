@@ -7,8 +7,21 @@ import {
     getMessageRoute,
     listMessagesRoute
 } from "./schema"
-import { eventMessages, grades, members, user as authUsers } from "../../../../share/drizzle/schema"
+import * as drizzleSchemaModule from "../../../../share/drizzle/schema"
 import { desc, eq, inArray } from "drizzle-orm"
+import {
+    buildMessageReactionSummary,
+    collectDiscordUserIds,
+    LinkedReactionUser
+} from "./reactions"
+
+const drizzleSchema = (
+    "eventMessages" in drizzleSchemaModule
+        ? drizzleSchemaModule
+        : (drizzleSchemaModule as any).default ?? (drizzleSchemaModule as any)["module.exports"]
+) as typeof drizzleSchemaModule;
+
+const { eventMessages, grades, members, user: authUsers } = drizzleSchema;
 
 // ***** message *****
 // イベント通知メッセージ送信のビジネスロジック
@@ -126,11 +139,9 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
             }))
         );
 
-        const discordUserIds = Array.from(new Set(
-            reactionUsersByEmoji.flatMap((reaction) => reaction.users.map((user) => user.id))
-        ));
+        const discordUserIds = collectDiscordUserIds(reactionUsersByEmoji);
 
-        const linkedUsers = discordUserIds.length > 0
+        const linkedUsers: LinkedReactionUser[] = discordUserIds.length > 0
             ? await db
                 .select({
                     discordUserId: authUsers.discordUserId,
@@ -153,56 +164,17 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
                 .where(inArray(authUsers.discordUserId, discordUserIds))
             : [];
 
-        const linkedUserMap = new Map(
-            linkedUsers
-                .filter((user) => user.discordUserId)
-                .map((user) => [user.discordUserId, user])
+        const summary = buildMessageReactionSummary(
+            eventMessage,
+            discordMessage,
+            reactionUsersByEmoji,
+            linkedUsers,
         );
-        const memberMap = new Map<string, any>();
-
-        const reactions = reactionUsersByEmoji.map((reaction) => {
-            const users = reaction.users.map((discordUser) => {
-                const linkedUser = linkedUserMap.get(discordUser.id);
-                const reactionMember = {
-                    discordUserId: discordUser.id,
-                    discordUsername: discordUser.username,
-                    discordGlobalName: discordUser.globalName,
-                    userId: linkedUser?.userId ?? null,
-                    userName: linkedUser?.userName ?? null,
-                    displayName: linkedUser?.displayName ?? null,
-                    email: linkedUser?.email ?? null,
-                    memberId: linkedUser?.memberId ?? null,
-                    memberName: linkedUser?.memberName ?? null,
-                    displayGrade: linkedUser?.displayGrade ?? null,
-                    studentId: linkedUser?.studentId ?? null,
-                    studentEmail: linkedUser?.studentEmail ?? null,
-                    emergencyContact: linkedUser?.emergencyContact ?? null,
-                    insurance: linkedUser?.insurance ?? null,
-                    someAllergy: linkedUser?.someAllergy ?? null,
-                    reactions: [reaction.emoji],
-                };
-
-                const existingMember = memberMap.get(discordUser.id);
-                if (existingMember) {
-                    existingMember.reactions.push(reaction.emoji);
-                } else {
-                    memberMap.set(discordUser.id, { ...reactionMember });
-                }
-
-                return reactionMember;
-            });
-
-            return {
-                emoji: reaction.emoji,
-                count: reaction.count,
-                users,
-            };
-        });
 
         return c.json({
-            eventMessage,
-            reactions,
-            members: Array.from(memberMap.values()),
+            eventMessage: summary.eventMessage,
+            reactions: summary.reactions,
+            members: summary.members,
         }, 200);
     } catch (error) {
         if (error instanceof CommunityProviderError) {
