@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  member:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install member dependencies
+        working-directory: member
+        run: npm ci --ignore-scripts
+      - name: Test member API
+        working-directory: member
+        run: npm test
+      - name: Type-check member API
+        working-directory: member
+        run: npm run typecheck
+
+  application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install member dependencies for shared API types
+        working-directory: member
+        run: npm ci --ignore-scripts
+      - name: Install community dependencies
+        working-directory: community
+        run: npm ci --ignore-scripts
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+      - name: Test community API
+        working-directory: community
+        run: npm test
+      - name: Type-check community API
+        working-directory: community
+        run: ./node_modules/.bin/tsc --noEmit
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+      - name: Type-check frontend
+        working-directory: frontend
+        run: ./node_modules/.bin/tsc --noEmit
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

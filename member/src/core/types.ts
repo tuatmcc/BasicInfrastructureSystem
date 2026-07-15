@@ -14,6 +14,7 @@ export type CloudflareBindings = {
   DISCORD_CLIENT_SECRET: string
 
   NODE_ENV: 'development' | 'production' | null
+  DEV_USER_ID?: string
   HYPERDRIVE?: any
 }
 
