@@ -5,6 +5,7 @@ DATABASE_URL=postgresql://user:password@host:port/dbname
 BETTER_AUTH_SECRET=your_secure_random_32_char_string
 COMMUNITY_URL=http://localhost:8787
 FRONTEND_URL=http://localhost:3000
+DEV_USER_ID=replace_with_an_existing_better_auth_user_id
 
 # Social Providers
 GITHUB_CLIENT_ID=your_github_client_id

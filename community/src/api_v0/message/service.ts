@@ -7,21 +7,13 @@ import {
     getMessageRoute,
     listMessagesRoute
 } from "./schema"
-import * as drizzleSchemaModule from "../../../../share/drizzle/schema"
+import { eventMessages, grades, members, user as authUsers } from "../../../../share/drizzle/schema"
 import { desc, eq, inArray } from "drizzle-orm"
 import {
     buildMessageReactionSummary,
     collectDiscordUserIds,
     LinkedReactionUser
 } from "./reactions"
-
-const drizzleSchema = (
-    "eventMessages" in drizzleSchemaModule
-        ? drizzleSchemaModule
-        : (drizzleSchemaModule as any).default ?? (drizzleSchemaModule as any)["module.exports"]
-) as typeof drizzleSchemaModule;
-
-const { eventMessages, grades, members, user: authUsers } = drizzleSchema;
 
 // ***** message *****
 // イベント通知メッセージ送信のビジネスロジック

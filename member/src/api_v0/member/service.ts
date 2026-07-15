@@ -9,7 +9,14 @@ import { createMemberRoute,
     getMembersByIdsRoute
  } from "./schema";
 import { members, user, grades } from "../../../../share/drizzle/schema";
-import { eq, sql, getTableColumns, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray, isNull } from "drizzle-orm";
+
+class MemberJoinConflictError extends Error {
+    constructor() {
+        super("Member is already linked to this user");
+        this.name = "MemberJoinConflictError";
+    }
+}
 
 export const createMemberService:RouteHandler<typeof createMemberRoute,AppContext> = async (c) => {
     const appUser = c.get("appUser");
@@ -33,24 +40,47 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
         return c.json({ error: "Already joined" }, 409);
     }
 
-    const [createdMember] = await db.transaction(async (tx) => {
-        const [member] = await tx
-            .insert(members)
-            .values(c.req.valid("json"))
-            .returning();
+    const memberId = crypto.randomUUID();
 
-        await tx
-            .update(user)
-            .set({
-                memberId: member.memberId,
-                updatedAt: new Date(),
-            })
-            .where(eq(user.id, appUser.id));
+    try {
+        const createdMember = await db.transaction(async (tx) => {
+            // INSERT ... RETURNING is also checked by the members SELECT policy.
+            // Mark only this server-generated UUID as the current member for this transaction.
+            await tx.execute(sql`
+                select set_config('app.current_member_id', ${memberId}, true)
+            `);
 
-        return [member];
-    });
+            const [member] = await tx
+                .insert(members)
+                .values({
+                    ...c.req.valid("json"),
+                    memberId,
+                })
+                .returning();
 
-    return c.json(createdMember, 201);
+            const linkedUsers = await tx
+                .update(user)
+                .set({
+                    memberId,
+                    updatedAt: new Date(),
+                })
+                .where(and(eq(user.id, appUser.id), isNull(user.memberId)))
+                .returning({ id: user.id });
+
+            if (linkedUsers.length !== 1) {
+                throw new MemberJoinConflictError();
+            }
+
+            return member;
+        });
+
+        return c.json(createdMember, 201);
+    } catch (error) {
+        if (error instanceof MemberJoinConflictError) {
+            return c.json({ error: "Already joined" }, 409);
+        }
+        throw error;
+    }
 };
 
 export const getMemberService:RouteHandler<typeof getMemberRoute,AppContext> = async (c) => {

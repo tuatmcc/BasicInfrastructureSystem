@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { client } from '@/lib/client'
@@ -20,23 +20,29 @@ export default function JoinPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
 
-  useQuery({
+  const fetchCurrentMember = async () => {
+    const res = await client.api.v0.member.me.$get()
+    const status = res.status as number
+    if (status === 401) {
+      return null
+    }
+    if (!res.ok) {
+      throw new Error(`Member API Error: ${status}`)
+    }
+    return res.json()
+  }
+
+  const { data: existingMember } = useQuery({
     queryKey: ['member'],
-    queryFn: async () => {
-      const res = await client.api.v0.member.me.$get()
-      const status = res.status as number
-      if (status === 401) {
-        return null
-      }
-      if (!res.ok) {
-        throw new Error(`Member API Error: ${status}`)
-      }
-      const member = await res.json()
-      router.replace('/me')
-      return member
-    },
+    queryFn: fetchCurrentMember,
     retry: false,
   })
+
+  useEffect(() => {
+    if (existingMember) {
+      router.replace('/me')
+    }
+  }, [existingMember, router])
 
   const { data: grades = [], isLoading: isGradesLoading } = useQuery({
     queryKey: ['grades'],
@@ -60,6 +66,9 @@ export default function JoinPage() {
         throw new Error('学年を選択してください。')
       }
 
+      // Prevent an older /me response from overwriting the successful join result.
+      await queryClient.cancelQueries({ queryKey: ['member'] })
+
       const res = await client.api.v0.member.join.$post({
         json: {
           name: joinForm.name,
@@ -74,7 +83,15 @@ export default function JoinPage() {
       const status = res.status as number
 
       if (status === 409) {
-        throw new Error('既に入部済みです。マイページに移動してください。')
+        const member = await queryClient.fetchQuery({
+          queryKey: ['member'],
+          queryFn: fetchCurrentMember,
+          staleTime: 0,
+        })
+        if (!member) {
+          throw new Error('入部状態を確認できません。ページを再読み込みしてください。')
+        }
+        return
       }
       if (status === 401) {
         throw new Error('ログイン状態を確認できません。再ログインしてください。')
@@ -83,8 +100,8 @@ export default function JoinPage() {
         throw new Error(`入部に失敗しました: ${status}`)
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['member'] })
-      router.push('/me')
+      const createdMember = await res.json()
+      queryClient.setQueryData(['member'], createdMember)
     } catch (err) {
       setJoinError(err instanceof Error ? err.message : '入部に失敗しました。')
     } finally {
