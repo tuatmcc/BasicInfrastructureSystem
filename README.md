@@ -24,7 +24,7 @@ graph TD
 ## 🚀 開発環境のセットアップ (Getting Started)
 
 ### 📌 前提条件
-*   Node.js (v20以上推奨)
+*   Node.js (v22以上、v24推奨)
 *   npm
 *   [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-update/) （Cloudflare の開発・デプロイツール）
 

@@ -38,9 +38,7 @@ export const getAuth = (c: Context<AppContext>) => {
             }
         },
         advanced: {
-            cookiePrefix: "app-auth",
-            // ローカルHTTP開発のための設定
-            useSecureCookies: false 
+            cookiePrefix: "app-auth"
         }
     });
 };
