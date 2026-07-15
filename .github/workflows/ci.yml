@@ -26,12 +26,18 @@ jobs:
       - name: Install member dependencies
         working-directory: member
         run: npm ci --ignore-scripts
+      - name: Audit member runtime dependencies
+        working-directory: member
+        run: npm audit --omit=dev --audit-level=high
       - name: Test member API
         working-directory: member
         run: npm test
       - name: Type-check member API
         working-directory: member
         run: npm run typecheck
+      - name: Bundle member Worker
+        working-directory: member
+        run: ./node_modules/.bin/wrangler deploy --dry-run
 
   application:
     runs-on: ubuntu-latest
@@ -50,18 +56,30 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci --ignore-scripts
+      - name: Audit community runtime dependencies
+        working-directory: community
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit frontend runtime dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
       - name: Test community API
         working-directory: community
         run: npm test
       - name: Type-check community API
         working-directory: community
         run: ./node_modules/.bin/tsc --noEmit
+      - name: Bundle community Worker
+        working-directory: community
+        run: ./node_modules/.bin/wrangler deploy --dry-run
       - name: Test frontend
         working-directory: frontend
         run: npm test
       - name: Type-check frontend
         working-directory: frontend
         run: ./node_modules/.bin/tsc --noEmit
-      - name: Build frontend
+      - name: Lint frontend
         working-directory: frontend
-        run: npm run build
+        run: npm run lint
+      - name: Build frontend Worker
+        working-directory: frontend
+        run: ./node_modules/.bin/opennextjs-cloudflare build
