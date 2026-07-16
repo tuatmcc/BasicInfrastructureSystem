@@ -120,6 +120,6 @@ npm run deploy
 
 ## 🛠️ 開発規約 (Development Conventions)
 
-*   **Drizzle ORM & Schema**: スキーマ定義は `/share/drizzle/schema.ts` に一元管理されています。テーブル構造を変更した場合は、必ず `drizzle-kit generate` やマイグレーションを適用し、型定義を同期させてください。
+*   **Database migrations**: 適用履歴の正本は `/supabase/migrations` です。`supabase migration new <name>` で作成し、`/share/drizzle/schema.ts` を同じPRで同期してください。Drizzleの生成SQLはレビュー補助であり、直接適用しません。詳細は [`docs/database-migrations.md`](docs/database-migrations.md) を参照してください。
 *   **OpenAPI 仕様の遵守**: API のルートやバリデーションスキーマの定義には `@hono/zod-openapi` を厳格に使用し、コードと Swagger UI（`/ui` エンドポイント）が常に同期するように実装してください。
-*   **型安全の確保**: バックエンドとフロントエンド間の API 通信は、Hono Client (`hc`) を用いて [frontend/src/lib/client.ts](file:///Users/horiuchi/workspace/BasicInfrastructureSystem/frontend/src/lib/client.ts) でクライアント化され、エンドツーエンドでの型安全性が保証されています。
+*   **型安全の確保**: バックエンドとフロントエンド間の API 通信は、Hono Client (`hc`) を用いて `frontend/src/lib/client.ts` でクライアント化され、エンドツーエンドでの型安全性が保証されています。
