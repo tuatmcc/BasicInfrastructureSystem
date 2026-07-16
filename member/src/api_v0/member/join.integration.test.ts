@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
 import test from 'node:test'
-import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { sign } from 'hono/jwt'
@@ -24,6 +21,64 @@ const joinInput = {
   insurance: true,
   someAllergy: false,
 }
+
+// This is a focused PGlite fixture, not a migration source. Canonical database
+// migrations live under supabase/migrations and require a full Supabase/Postgres
+// environment (roles, auth schema, and extensions) to replay.
+const joinRlsFixture = `
+  create role app_rls;
+  grant app_rls to current_user;
+  grant usage on schema public to app_rls;
+  grant select, update on "user" to app_rls;
+  grant select on grades to app_rls;
+  grant select, insert, update on members to app_rls;
+  grant select, insert, update, delete on event_messages to app_rls;
+
+  alter table grades enable row level security;
+  alter table members enable row level security;
+  alter table event_messages enable row level security;
+
+  alter table grades force row level security;
+  alter table members force row level security;
+  alter table event_messages force row level security;
+
+  create policy grades_select_app_user on grades
+    for select to app_rls
+    using ((select current_setting('app.current_user_id', true)) <> '');
+
+  create policy members_select_self_or_admin on members
+    for select to app_rls
+    using (
+      (select current_setting('app.current_user_role', true)) = 'admin'
+      or member_id = nullif((select current_setting('app.current_member_id', true)), '')::uuid
+    );
+
+  create policy members_insert_self_or_admin on members
+    for insert to app_rls
+    with check (
+      (select current_setting('app.current_user_role', true)) = 'admin'
+      or (
+        (select current_setting('app.current_user_id', true)) <> ''
+        and member_id = nullif((select current_setting('app.current_member_id', true)), '')::uuid
+      )
+    );
+
+  create policy members_update_self_or_admin on members
+    for update to app_rls
+    using (
+      (select current_setting('app.current_user_role', true)) = 'admin'
+      or member_id = nullif((select current_setting('app.current_member_id', true)), '')::uuid
+    )
+    with check (
+      (select current_setting('app.current_user_role', true)) = 'admin'
+      or member_id = nullif((select current_setting('app.current_member_id', true)), '')::uuid
+    );
+
+  create policy event_messages_admin_all on event_messages
+    for all to app_rls
+    using ((select current_setting('app.current_user_role', true)) = 'admin')
+    with check ((select current_setting('app.current_user_role', true)) = 'admin');
+`
 
 const unjoinedUser: appUser = {
   id: 'user-1',
@@ -118,14 +173,7 @@ test('join persists and links one member under RLS, then rejects a stale duplica
       values ('user-1', 'test-user', 'Test User', 'user', now());
     `)
 
-    const rlsMigration = await readFile(
-      resolve(
-        dirname(fileURLToPath(import.meta.url)),
-        '../../../../share/drizzle/0007_soft_rls.sql',
-      ),
-      'utf8',
-    )
-    await client.exec(rlsMigration)
+    await client.exec(joinRlsFixture)
     await client.exec(`
       set role app_rls;
       select set_config('app.current_user_id', 'user-1', false);

@@ -1,4 +1,4 @@
-supabase/*
 tmp.md
 .env
 backup_env/
+.drizzle/
