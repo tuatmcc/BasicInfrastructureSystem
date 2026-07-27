@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, app_api, extensions, pg_catalog;
 
-select plan(18);
+select plan(19);
 
 -- Test-only grants are rolled back with this file. Runtime migrations do not
 -- expose extension functions to the application role.
@@ -333,11 +333,22 @@ select
   set_config('app.current_member_id', '', true),
   set_config('app.current_user_role', 'admin', true);
 
-select throws_ok(
+-- The reviewer used to be protected by a foreign key. That key crossed into the
+-- authentication store and had to go, so the reviewer is now a snapshot:
+-- deleting the account succeeds and leaves the review record as written.
+select lives_ok(
   $$delete from app_auth."user" where id = 'test-admin'$$,
-  '23503',
-  null,
-  'a reviewer account cannot be deleted while reviewed memberships reference it'
+  'a reviewer account can be deleted because the reviewer is only a snapshot'
+);
+
+select is(
+  (
+    select reviewed_by_user_id
+    from public.members
+    where member_id = '00000000-0000-4000-8000-000000000002'
+  ),
+  'test-admin'::text,
+  'deleting the reviewer account leaves the review snapshot untouched'
 );
 
 select lives_ok(
