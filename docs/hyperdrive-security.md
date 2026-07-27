@@ -104,7 +104,7 @@ connection override is a Wrangler **process environment variable**, not a
 normal Worker variable:
 
 ```bash
-export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE='postgresql://app_runtime_login:password@localhost:5432/postgres'
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE='postgresql://app_runtime:password@localhost:5432/postgres'
 ```
 
 Do not copy the repository-wide `.env` into both Workers; that exposes secrets

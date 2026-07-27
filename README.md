@@ -52,10 +52,10 @@ cp member/.dev.vars.example member/.dev.vars
 ローカル開発時（`wrangler dev`）は、Hyperdriveの接続先をWranglerプロセスの環境変数で上書きします。`.dev.vars` の通常のWorker bindingとは別なので、APIを起動する各シェルで設定してください。
 
 ```bash
-export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app_runtime_login:password@host:5432/database"
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app_runtime:password@host:5432/database"
 ```
 
-`app_runtime_login` はDB運用runbookで作る非superuser・非`BYPASSRLS`の専用ロールです。アプリケーションから`postgres`/owner資格情報を使わないでください。
+`app_runtime` はDB運用runbookで作る非superuser・非`BYPASSRLS`の専用ロールです。アプリケーションから`postgres`/owner資格情報を使わないでください。
 
 ### 3. 各プロジェクトのローカル起動
 それぞれのディレクトリで開発サーバーを起動します。

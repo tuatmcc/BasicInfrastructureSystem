@@ -1,5 +1,5 @@
 # Database
-DATABASE_URL=postgresql://app_runtime_login:password@host:port/dbname
+DATABASE_URL=postgresql://app_runtime:password@host:port/dbname
 
 # Better Auth Configuration
 BETTER_AUTH_SECRET=your_secure_random_32_char_string

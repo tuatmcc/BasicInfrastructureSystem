@@ -1,5 +1,5 @@
 # Database
-DATABASE_URL=postgresql://app_runtime_login:password@host:port/dbname
+DATABASE_URL=postgresql://app_runtime:password@host:port/dbname
 
 # Application JWT verification (must match community JWT_SECRET)
 JWT_SECRET=your_application_jwt_secret
