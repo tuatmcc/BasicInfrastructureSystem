@@ -778,7 +778,7 @@ test('development auth reloads memberId and downstream failures remain server er
     let captured: appUser | undefined
     const baseContext = {
       env: { NODE_ENV: 'development', DEV_USER_ID: 'user-1' },
-      req: { header: () => undefined },
+      req: { url: 'http://localhost:8788/api/v0/member/me', header: () => undefined },
       get: (key: string) => key === 'db' ? db : undefined,
       set: (_key: string, value: appUser) => { captured = value },
       json: (body: unknown, status: number): JsonResponse => ({ body, status }),
@@ -796,6 +796,21 @@ test('development auth reloads memberId and downstream failures remain server er
       } as never, async () => { throw new Error('downstream database failure') }),
       /downstream database failure/,
     )
+
+    // A deployment that still carries NODE_ENV=development must verify tokens
+    // rather than serve every request as DEV_USER_ID.
+    const deployed = await authMiddleware({
+      ...baseContext,
+      req: {
+        url: 'https://member.example.com/api/v0/member/me',
+        header: () => undefined,
+        raw: { headers: new Headers() },
+      },
+      json: (body: unknown, status: number): JsonResponse => ({ body, status }),
+    } as never, async () => {
+      throw new Error('the development bypass must not run on a deployed hostname')
+    }) as unknown as JsonResponse
+    assert.equal(deployed.status, 401)
   } finally {
     await client.close()
   }

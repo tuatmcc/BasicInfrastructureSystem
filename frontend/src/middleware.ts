@@ -8,6 +8,10 @@ export async function middleware(request: NextRequest) {
 
   if (isPublicAsset) return NextResponse.next()
 
+  // Unlike the Workers, this is safe to key on NODE_ENV: Next inlines it at
+  // build time, so a production build cannot be talked back into the bypass by
+  // a runtime variable. The Workers read theirs at runtime and therefore also
+  // require a local hostname.
   if (isDevelopment) {
     return NextResponse.next()
   }
