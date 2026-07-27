@@ -15,6 +15,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          # Pinned: resolving "latest" queries the GitHub API unauthenticated,
+          # which rate-limits as soon as a few pull requests build at once.
+          version: 2.101.0
+      # Replays every migration into a fresh database, so a migration that only
+      # works against an already-populated schema fails here instead of in a
+      # maintenance window.
+      - name: Start the local database
+        run: supabase db start
+      # The RLS boundary and the directory allowlist are enforced in SQL, so the
+      # pgTAP suites under supabase/tests are the only thing that proves them.
+      - name: Run pgTAP suites
+        run: supabase test db
+      - name: Stop the local database
+        if: always()
+        # Never turn a teardown problem into the reported failure.
+        continue-on-error: true
+        run: supabase stop --no-backup
+
   member:
     runs-on: ubuntu-latest
     steps:

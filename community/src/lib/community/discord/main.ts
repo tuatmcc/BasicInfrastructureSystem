@@ -1,7 +1,7 @@
 import type { CommunityProvider } from '../interface';
-import type { DiscordMessage, DiscordReactionUser, Role, SendMessageInput, SendMessageResult } from '../type';
+import type { DiscordGuildMembership, DiscordMessage, DiscordReactionUser, Role, SendMessageInput, SendMessageResult } from '../type';
 import { CommunityProviderError } from '../error';
-import { listUserRolesAPI } from './role';
+import { getGuildMembershipAPI, listUserRolesAPI } from './role';
 import { getMessageAPI, listMessageReactionUsersAPI, sendMessageAPI } from './message';
 
 export class DiscordProvider implements CommunityProvider {
@@ -33,6 +33,10 @@ export class DiscordProvider implements CommunityProvider {
 
   async listUserRoles(userId: string): Promise<Role[]> {
     return listUserRolesAPI(this, userId);
+  }
+
+  async getGuildMembership(userId: string): Promise<DiscordGuildMembership> {
+    return getGuildMembershipAPI(this, userId);
   }
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {

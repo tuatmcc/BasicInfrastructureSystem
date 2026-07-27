@@ -24,7 +24,7 @@ const app = new OpenAPIHono<AppContext>()
     return corsMiddleware(c, next)
   })
   .use('/api/*', dbMiddleware)
-  .use('/api/*', communityMiddleware)
+  .use('/api/v0/*', communityMiddleware)
   .use('/api/v0/*', authMiddleware)
   
   .get('/health', (c: any): Response => c.json({ status: 'ok' }))

@@ -9,6 +9,21 @@ export const RoleSchema = z.object({
 });
 export type Role = z.infer<typeof RoleSchema>;
 
+export const DiscordOAuthUserSchema = z.object({
+  id: DiscordSnowflakeSchema,
+  username: z.string().min(1),
+  globalName: z.string().nullable(),
+  avatarUrl: z.string().url().nullable(),
+});
+export type DiscordOAuthUser = z.infer<typeof DiscordOAuthUserSchema>;
+
+export const DiscordGuildMembershipSchema = z.object({
+  userId: DiscordSnowflakeSchema,
+  nickname: z.string().nullable(),
+  roles: z.array(RoleSchema),
+});
+export type DiscordGuildMembership = z.infer<typeof DiscordGuildMembershipSchema>;
+
 export const GetUserRolesInputSchema = z.object({
   userId: z.string(),
 });

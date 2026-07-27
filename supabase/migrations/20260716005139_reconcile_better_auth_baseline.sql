@@ -219,11 +219,11 @@ revoke execute on all functions in schema public from public, anon, authenticate
 revoke all on all tables in schema public from app_rls;
 revoke all on all sequences in schema public from app_rls;
 
-alter default privileges for role postgres in schema public
+alter default privileges in schema public
   revoke all on tables from anon, authenticated, app_rls;
-alter default privileges for role postgres in schema public
+alter default privileges in schema public
   revoke all on sequences from anon, authenticated, app_rls;
-alter default privileges for role postgres in schema public
+alter default privileges in schema public
   revoke execute on functions from public, anon, authenticated;
 
 grant select, insert, update, delete

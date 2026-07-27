@@ -1,23 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { client } from '@/lib/client'
+import ProfileEditForm from './ProfileEditForm'
 
 export default function MePage() {
-  const [isExporting, setIsExporting] = useState(false)
-  const [exportError, setExportError] = useState<string | null>(null)
-  const [exportSuccess, setExportSuccess] = useState(false)
-
   const { data: member, isLoading, error } = useQuery({
     queryKey: ['member'],
     queryFn: async () => {
       const res = await client.api.v0.member.me.$get()
       const status = res.status as number
-      if (status === 401) {
+      if (status === 404) {
         return null
       }
+      if (status === 401) throw new Error('ログイン状態を確認できません。再ログインしてください。')
       if (!res.ok) {
         throw new Error(`API Error: ${status}`)
       }
@@ -25,45 +22,14 @@ export default function MePage() {
     },
   })
 
-  const handleExportCSV = async () => {
-    if (!member?.memberId) return
-    setIsExporting(true)
-    setExportError(null)
-    setExportSuccess(false)
-    try {
-      const headers = ['名前', '学年', '学籍番号', '学生メールアドレス', '緊急連絡先', '保険加入状況', 'アレルギー情報', '作成日時', 'メンバーID']
-      const csvRows = [headers.map(h => `"${h}"`).join(',')]
-      const row = [
-        member.name || '',
-        member.displayGrade || member.grade || '',
-        member.studentId || '',
-        member.studentEmail || '',
-        member.emergencyContact || '',
-        member.insurance ? '加入' : '未加入',
-        member.someAllergy ? 'あり' : 'なし',
-        member.createdAt || '',
-        member.memberId || '',
-      ]
-      csvRows.push(row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-
-      const csvContent = '\ufeff' + csvRows.join('\n')
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.setAttribute('href', url)
-      link.setAttribute('download', `member_export_${new Date().toISOString().split('T')[0]}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
-      setExportSuccess(true)
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'CSVの出力に失敗しました。')
-    } finally {
-      setIsExporting(false)
-    }
-  }
+  const { data: grades = [] } = useQuery({
+    queryKey: ['grades'],
+    queryFn: async () => {
+      const response = await client.api.v0.grade.$get()
+      if (!response.ok) throw new Error(`Grade API Error: ${response.status}`)
+      return response.json()
+    },
+  })
 
   if (isLoading) {
     return (
@@ -101,19 +67,36 @@ export default function MePage() {
     )
   }
 
+  if (member.memberStatus !== 'active') {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+        <div className="max-w-xl mx-auto bg-white shadow-sm rounded-xl border border-gray-200 p-6">
+          <h1 className="text-2xl font-bold text-gray-900">入部申請を確認してください</h1>
+          <p className="text-gray-500 mt-2">承認済みになるまで、申請画面で状態確認と内容修正を行います。</p>
+          <Link href="/join" className="inline-flex mt-6 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+            入部申請へ
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
-            <p className="text-gray-500">登録済みの部員情報です。</p>
+            <h1 className="text-3xl font-bold text-gray-900">自分のプロフィール</h1>
+            <p className="text-gray-500">登録情報と一般台帳向けプロフィールを管理します。</p>
           </div>
-          <div className="bg-blue-100 text-blue-800 px-4 py-1 rounded-full text-sm font-medium">Active Member</div>
+          <div className="flex items-center gap-2">
+            <Link href="/members" className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">部員台帳</Link>
+            <div className="bg-blue-100 text-blue-800 px-4 py-1 rounded-full text-sm font-medium">承認済み</div>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <section className="md:col-span-2 bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+        <div>
+          <section className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-800">Member Profile</h2>
             </div>
@@ -156,20 +139,8 @@ export default function MePage() {
             </div>
           </section>
 
-          <section className="bg-white shadow-sm rounded-xl border border-gray-200 p-6 h-fit">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Export</h3>
-            <p className="text-xs text-gray-500 mb-4">自分の部員情報をCSVで出力します。</p>
-            <button
-              onClick={handleExportCSV}
-              disabled={isExporting}
-              className="w-full py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 font-medium text-sm"
-            >
-              {isExporting ? 'Exporting...' : 'Export CSV'}
-            </button>
-            {exportError && <p className="text-xs text-red-600 mt-2 font-medium">{exportError}</p>}
-            {exportSuccess && <p className="text-xs text-green-600 mt-2 font-medium">CSV downloaded successfully!</p>}
-          </section>
         </div>
+        <ProfileEditForm member={member} grades={grades} />
       </div>
     </div>
   )

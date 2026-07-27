@@ -39,21 +39,23 @@ cd ../frontend && npm install
 cd ..
 ```
 
-### 2. 環境変数（`.env`）の設定
-リポジトリのルートディレクトリに存在する `.env` ファイル（Git管理外）を作成・編集します。テンプレートとして `.env.example` をコピーして作成してください。
+### 2. 環境変数の設定
+各Workerには必要な秘密だけを渡します。ルートの `.env` をWorkerへ丸ごとコピーしないでください。
 
 ```bash
 cp .env.example .env
+cp community/.dev.vars.example community/.dev.vars
+cp member/.dev.vars.example member/.dev.vars
 ```
 
 **【重要】Hyperdrive ローカルエミュレーション設定**
-ローカル開発時（`wrangler dev`）にも、Wrangler がローカルでデータベース接続プール（Hyperdrive）をエミュレートするため、以下の環境変数をルートの `.env` に設定する必要があります。
+ローカル開発時（`wrangler dev`）は、Hyperdriveの接続先をWranglerプロセスの環境変数で上書きします。`.dev.vars` の通常のWorker bindingとは別なので、APIを起動する各シェルで設定してください。
 
-```ini
-# Wrangler Hyperdrive Local Connection Emulation String
-CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://username:password@host:5432/database"
+```bash
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app_runtime_login:password@host:5432/database"
 ```
-*※ローカル開発でご自身の PostgreSQL（Docker 等）を使用する場合は、上記のアドレスをローカルDBのものに書き換えてください。*
+
+`app_runtime_login` はDB運用runbookで作る非superuser・非`BYPASSRLS`の専用ロールです。アプリケーションから`postgres`/owner資格情報を使わないでください。
 
 ### 3. 各プロジェクトのローカル起動
 それぞれのディレクトリで開発サーバーを起動します。
@@ -120,6 +122,6 @@ npm run deploy
 
 ## 🛠️ 開発規約 (Development Conventions)
 
-*   **Database migrations**: 適用履歴の正本は `/supabase/migrations` です。`supabase migration new <name>` で作成し、`/share/drizzle/schema.ts` を同じPRで同期してください。Drizzleの生成SQLはレビュー補助であり、直接適用しません。詳細は [`docs/database-migrations.md`](docs/database-migrations.md) を参照してください。
+*   **PostgreSQL & Drizzle**: 実行時は Supabase SDK/Data API を使わず、Workerでは Cloudflare Hyperdrive のプールを介し、ローカルでは `DATABASE_URL` を使って `pg` + Drizzle で PostgreSQL へ接続します。スキーマ定義は `/share/drizzle/schema.ts` で共有し、変更時は PostgreSQL migration と同じPRで同期してください。現在のDB適用履歴とポータビリティ方針は [`docs/database-migrations.md`](docs/database-migrations.md) を参照してください。
 *   **OpenAPI 仕様の遵守**: API のルートやバリデーションスキーマの定義には `@hono/zod-openapi` を厳格に使用し、コードと Swagger UI（`/ui` エンドポイント）が常に同期するように実装してください。
 *   **型安全の確保**: バックエンドとフロントエンド間の API 通信は、Hono Client (`hc`) を用いて `frontend/src/lib/client.ts` でクライアント化され、エンドツーエンドでの型安全性が保証されています。

@@ -13,7 +13,7 @@ export const createUserService: RouteHandler<typeof createUserRoute, AppContext>
         return c.json({ message: "Forbidden" }, 403);
     }
 
-    const [createdUser] = await db
+    const [createdUser] = await db.transaction((tx) => tx
         .insert(user)
         .values({
             ...body,
@@ -21,7 +21,7 @@ export const createUserService: RouteHandler<typeof createUserRoute, AppContext>
             createdAt: now,
             updatedAt: now,
         })
-        .returning();
+        .returning());
 
     return c.json(createdUser, 201);
 };
@@ -34,7 +34,7 @@ export const listUsersService: RouteHandler<typeof listUsersRoute, AppContext> =
         return c.json({ message: "Forbidden" }, 403);
     }
 
-    const users = await db.select().from(user);
+    const users = await db.transaction((tx) => tx.select().from(user));
 
     return c.json(users, 200);
 };

@@ -34,7 +34,16 @@ export default function AdminDashboardPage() {
             <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
             <p className="text-gray-500 mt-1">イベント通知と部員情報の管理状況を確認します。</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link href="/admin/applications" className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700">
+              入部申請
+            </Link>
+            <Link href="/admin/members" className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+              管理者台帳
+            </Link>
+            <Link href="/members" className="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50">
+              一般部員台帳
+            </Link>
             <Link href="/event" className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
               イベント一覧
             </Link>
@@ -60,9 +69,9 @@ export default function AdminDashboardPage() {
             </p>
           </section>
           <section className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-            <p className="text-xs font-bold text-gray-400 uppercase">Workflow</p>
-            <p className="text-lg font-semibold text-gray-900 mt-2">通知 → 反応確認 → CSV</p>
-            <p className="text-sm text-gray-500 mt-1">イベント詳細から集計できます</p>
+            <p className="text-xs font-bold text-gray-400 uppercase">Membership</p>
+            <p className="text-lg font-semibold text-gray-900 mt-2">申請 → Discord再確認 → 承認</p>
+            <p className="text-sm text-gray-500 mt-1">申請一覧から審査できます</p>
           </section>
         </div>
 

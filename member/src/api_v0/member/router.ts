@@ -1,48 +1,35 @@
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { MemberSchema, UpdateMemberSchema } from "./schema";
-import type { AppContext } from "../../core/types";
-import { 
-    createMemberService,
-    getMemberService,
-    joinMemberService,
-    // getMembersByIdService,
-    // getMembersByConditionService,
-    updateMemberService,
-    updateMemberByIdService,
-    deleteMemberService,
-    getMembersByIdsService
-} from "./service";
-
+import { OpenAPIHono } from '@hono/zod-openapi'
+import type { AppContext } from '../../core/types'
 import {
-    createMemberRoute,
-    getMemberRoute,
-    joinMemberRoute,
-    // getMembersByIdRoute,
-    // getMembersByConditionRoute,
-    updateMemberRoute,
-    updateMemberByIdRoute,
-    deleteMemberRoute,
-    getMembersByIdsRoute
-} from "./schema"
-
-// ***** users *****
-// ユーザー情報の管理
-// 基本は / を使用して自分自身の情報を操作する
-// 管理者(admin)のみが param idを渡して を使用して他者の情報を操作できる
-// path: /users
-// *****************
-
-
-// --- api ---
+  approveMemberRoute,
+  getAdminMemberRoute,
+  getDirectoryRoute,
+  getMemberRoute,
+  joinMemberRoute,
+  listAdminMembersRoute,
+  rejectMemberRoute,
+  updateAdminMemberRoute,
+  updateMemberRoute,
+} from './schema'
+import {
+  approveMemberService,
+  getAdminMemberService,
+  getDirectoryService,
+  getMemberService,
+  joinMemberService,
+  listAdminMembersService,
+  rejectMemberService,
+  updateAdminMemberService,
+  updateMemberService,
+} from './service'
 
 export const userRouter = new OpenAPIHono<AppContext>()
-    .openapi(getMemberRoute, getMemberService)
-    .openapi(updateMemberRoute, updateMemberService)
-    .openapi(joinMemberRoute, joinMemberService)
-    .openapi(createMemberRoute, createMemberService)
-    // .openapi(getMembersByIdRoute, getMembersByIdService)
-    // .openapi(getMembersByConditionRoute, getMembersByConditionService)
-    .openapi(updateMemberByIdRoute, updateMemberByIdService)
-    .openapi(deleteMemberRoute, deleteMemberService)
-    .openapi(getMembersByIdsRoute, getMembersByIdsService)
-
+  .openapi(getDirectoryRoute, getDirectoryService)
+  .openapi(getMemberRoute, getMemberService)
+  .openapi(updateMemberRoute, updateMemberService)
+  .openapi(joinMemberRoute, joinMemberService)
+  .openapi(listAdminMembersRoute, listAdminMembersService)
+  .openapi(approveMemberRoute, approveMemberService)
+  .openapi(rejectMemberRoute, rejectMemberService)
+  .openapi(updateAdminMemberRoute, updateAdminMemberService)
+  .openapi(getAdminMemberRoute, getAdminMemberService)

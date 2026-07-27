@@ -1,6 +1,28 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AppContext } from "../core/types";
 import { getAuth, getJwtRoute, getJwtHandler } from "./better-auth";
+import { serialize } from "hono/utils/cookie";
+
+export const withClearedAppAuthorizationCookie = (
+  response: Response,
+  options: { isLocal: boolean; domain?: string },
+) => {
+  const headers = new Headers(response.headers);
+  headers.append('Set-Cookie', serialize('app-authorization', '', {
+    path: '/',
+    httpOnly: true,
+    secure: !options.isLocal,
+    sameSite: 'Lax',
+    maxAge: 0,
+    domain: options.domain || undefined,
+  }));
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
 
 export const authRouter = new OpenAPIHono<AppContext>()
   // 1. JWT Endpoint (OpenAPI Route)
@@ -15,15 +37,10 @@ export const authRouter = new OpenAPIHono<AppContext>()
     // Clear custom JWT cookie on sign-out
     const url = new URL(c.req.url);
     if (url.pathname.endsWith('/sign-out')) {
-      const { setCookie } = await import('hono/cookie');
       const isLocal = !c.env.COMMUNITY_URL || c.env.COMMUNITY_URL.includes('localhost');
-      setCookie(c, 'app-authorization', '', {
-        path: '/',
-        httpOnly: true,
-        secure: !isLocal,
-        sameSite: 'Lax',
-        maxAge: 0,
-        domain: c.env.COOKIE_DOMAIN || undefined,
+      return withClearedAppAuthorizationCookie(res, {
+        isLocal,
+        domain: c.env.COOKIE_DOMAIN,
       });
     }
     

@@ -12,25 +12,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // DEBUG: すべてのクッキーを出力
-  const allCookies = request.cookies.getAll().map(c => c.name)
-  console.log(`[Middleware Debug] Path: ${pathname}, Cookies: ${allCookies.join(', ')}`)
-
   // Better Auth uses session_token, but we use app-authorization (JWT)
   const token = request.cookies.get('app-authorization')
 
   if (!token && !isLoginPage) {
-    console.log(`[Middleware] No custom JWT token found. Redirecting to /login.`)
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   if (token && isLoginPage) {
-    console.log(`[Middleware] Token found. Redirecting from login to home.`)
     return NextResponse.redirect(new URL('/', request.url))
   }
 
   // Admin check and default landing split
-  if (token && (pathname.startsWith('/event') || pathname === '/')) {
+  if (token && (pathname.startsWith('/event') || pathname.startsWith('/admin') || pathname === '/')) {
     try {
         const jwtSecret = process.env.JWT_SECRET;
         if (!jwtSecret) {
@@ -40,9 +34,6 @@ export async function middleware(request: NextRequest) {
         const { jwtVerify } = await import('jose')
         const secret = new TextEncoder().encode(jwtSecret)
         const { payload } = await jwtVerify(token.value, secret)
-        if (pathname === '/' && payload.role !== 'admin') {
-          return NextResponse.redirect(new URL('/me', request.url))
-        }
         if (payload.role !== 'admin') {
           return NextResponse.redirect(new URL('/me', request.url))
         }
