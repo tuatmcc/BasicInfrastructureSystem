@@ -7,7 +7,7 @@ import {
     LinkedReactionUser,
     ReactionUsersByEmoji,
 } from './reactions';
-import type { DiscordMessage } from '../../lib/community/type';
+import type { CommunityMessage } from '../../lib/community/type';
 
 const eventMessage: EventMessageRecord = {
     id: 'event-1',
@@ -19,7 +19,7 @@ const eventMessage: EventMessageRecord = {
     updatedAt: '2026-07-01T00:00:00Z',
 };
 
-const discordMessage: DiscordMessage = {
+const discordMessage: CommunityMessage = {
     id: eventMessage.messageId,
     channelId: eventMessage.channelId,
     content: eventMessage.content,
@@ -27,7 +27,7 @@ const discordMessage: DiscordMessage = {
     author: {
         id: '323456789012345678',
         username: 'bot',
-        globalName: null,
+        displayName: null,
         bot: true,
     },
     reactions: [
@@ -41,15 +41,15 @@ const reactionUsersByEmoji: ReactionUsersByEmoji[] = [
         emoji: '✅',
         count: 2,
         users: [
-            { id: '423456789012345678', username: 'taro', globalName: 'Taro', bot: false },
-            { id: '523456789012345678', username: 'hanako', globalName: null, bot: false },
+            { id: '423456789012345678', username: 'taro', displayName: 'Taro', bot: false },
+            { id: '523456789012345678', username: 'hanako', displayName: null, bot: false },
         ],
     },
     {
         emoji: '🍱',
         count: 1,
         users: [
-            { id: '423456789012345678', username: 'taro', globalName: 'Taro', bot: false },
+            { id: '423456789012345678', username: 'taro', displayName: 'Taro', bot: false },
         ],
     },
 ];

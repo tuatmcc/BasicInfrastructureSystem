@@ -17,7 +17,7 @@ const linkedAccount = {
 const oauthUser = {
   id: linkedAccount.accountId,
   username: 'test-user',
-  globalName: 'Test User',
+  displayName: 'Test User',
   avatarUrl: null,
 };
 const guildMembership = {
@@ -30,7 +30,7 @@ const persisted = {
   provider: 'discord' as const,
   providerAccountId: linkedAccount.accountId,
   username: oauthUser.username,
-  providerDisplayName: oauthUser.globalName,
+  providerDisplayName: oauthUser.displayName,
   avatarUrl: null,
   oauthVerifiedAt: fixedNow,
   membership: {

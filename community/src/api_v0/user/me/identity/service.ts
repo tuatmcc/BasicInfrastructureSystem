@@ -11,8 +11,8 @@ import { getAuth } from '../../../../auth/better-auth';
 import { CommunityProviderError } from '../../../../lib/community/error';
 import { getCurrentDiscordUser } from '../../../../lib/community/discord/oauth';
 import type {
-  DiscordGuildMembership,
-  DiscordOAuthUser,
+  CommunityAccountProfile,
+  CommunityMembership,
 } from '../../../../lib/community/type';
 import {
   verifyDiscordIdentityRoute,
@@ -27,9 +27,9 @@ type LinkedDiscordAccount = {
 type PersistVerificationInput = {
   appUserId: string;
   linkedAccount: LinkedDiscordAccount;
-  oauthUser: DiscordOAuthUser;
+  oauthUser: CommunityAccountProfile;
   guildId: string;
-  guildMembership: DiscordGuildMembership | null;
+  guildMembership: CommunityMembership | null;
   verifiedAt: string;
 };
 
@@ -43,7 +43,7 @@ type IdentityAuthApi = {
 
 type VerificationDependencies = {
   getAuthApi(c: Context<AppContext>): IdentityAuthApi;
-  getCurrentDiscordUser(accessToken: string): Promise<DiscordOAuthUser>;
+  getCurrentDiscordUser(accessToken: string): Promise<CommunityAccountProfile>;
   findLinkedDiscordAccounts(
     c: Context<AppContext>,
     userId: string,
@@ -80,7 +80,7 @@ const persistVerification: VerificationDependencies['persistVerification'] = asy
         provider: 'discord',
         providerAccountId: input.oauthUser.id,
         username: input.oauthUser.username,
-        providerDisplayName: input.oauthUser.globalName,
+        providerDisplayName: input.oauthUser.displayName,
         avatarUrl: input.oauthUser.avatarUrl,
         oauthVerifiedAt: input.verifiedAt,
         lastSyncedAt: input.verifiedAt,
@@ -92,7 +92,7 @@ const persistVerification: VerificationDependencies['persistVerification'] = asy
           authAccountId: input.linkedAccount.id,
           providerAccountId: input.oauthUser.id,
           username: input.oauthUser.username,
-          providerDisplayName: input.oauthUser.globalName,
+          providerDisplayName: input.oauthUser.displayName,
           avatarUrl: input.oauthUser.avatarUrl,
           oauthVerifiedAt: input.verifiedAt,
           lastSyncedAt: input.verifiedAt,
@@ -222,7 +222,7 @@ export const createVerifyDiscordIdentityService = (
 
     const [linkedAccount] = linkedAccounts;
     let accessToken: string;
-    let oauthUser: DiscordOAuthUser;
+    let oauthUser: CommunityAccountProfile;
 
     try {
       ({ accessToken } = await authApi.getAccessToken({

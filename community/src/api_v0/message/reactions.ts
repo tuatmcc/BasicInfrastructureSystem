@@ -1,4 +1,4 @@
-import type { DiscordMessage, DiscordReactionUser } from "../../lib/community/type";
+import type { CommunityMessage, CommunityReactionUser } from "../../lib/community/type";
 import type { MemberStatus } from "../../../../share/drizzle/schema";
 
 export type EventMessageRecord = {
@@ -38,7 +38,7 @@ export type LinkedReactionUser = {
 export type ReactionUsersByEmoji = {
     emoji: string;
     count: number;
-    users: DiscordReactionUser[];
+    users: CommunityReactionUser[];
 };
 
 export type ReactionMember = {
@@ -76,7 +76,7 @@ export const collectDiscordUserIds = (reactionUsersByEmoji: ReactionUsersByEmoji
 
 export const buildMessageReactionSummary = (
     eventMessage: EventMessageRecord,
-    discordMessage: DiscordMessage,
+    discordMessage: CommunityMessage,
     reactionUsersByEmoji: ReactionUsersByEmoji[],
     linkedUsers: LinkedReactionUser[],
 ) => {
@@ -91,7 +91,7 @@ export const buildMessageReactionSummary = (
             const reactionMember: ReactionMember = {
                 discordUserId: discordUser.id,
                 discordUsername: discordUser.username,
-                discordGlobalName: discordUser.globalName,
+                discordGlobalName: discordUser.displayName,
                 userId: linkedUser?.userId ?? null,
                 userName: linkedUser?.userName ?? null,
                 displayName: linkedUser?.displayName ?? null,

@@ -1,11 +1,10 @@
 import type { DiscordProvider } from './main';
+import type { CommunityMembership, CommunityRole } from '../type';
 import {
-  DiscordGuildMembership,
-  DiscordGuildMembershipSchema,
+  DiscordMembershipSchema,
+  DiscordRoleSchema,
   DiscordSnowflakeSchema,
-  Role,
-  RoleSchema,
-} from '../type';
+} from './schema';
 import { CommunityProviderError } from '../error';
 
 type DiscordGuildMemberResponse = {
@@ -22,7 +21,7 @@ type DiscordRoleResponse = {
 export async function getGuildMembershipAPI(
   provider: DiscordProvider,
   userId: string,
-): Promise<DiscordGuildMembership> {
+): Promise<CommunityMembership> {
   const expectedUserId = DiscordSnowflakeSchema.parse(userId);
   const member = await provider.request<DiscordGuildMemberResponse>(
     'GET',
@@ -45,12 +44,12 @@ export async function getGuildMembershipAPI(
   );
   const roleMap = new Map(
     allRoles.map((role) => {
-      const parsed = RoleSchema.parse(role);
+      const parsed = DiscordRoleSchema.parse(role);
       return [parsed.id, parsed] as const;
     }),
   );
 
-  return DiscordGuildMembershipSchema.parse({
+  return DiscordMembershipSchema.parse({
     userId: expectedUserId,
     nickname: member.nick ?? null,
     roles: memberRoleIds.flatMap((roleId) => {
@@ -60,6 +59,6 @@ export async function getGuildMembershipAPI(
   });
 }
 
-export async function listUserRolesAPI(provider: DiscordProvider, userId: string): Promise<Role[]> {
+export async function listUserRolesAPI(provider: DiscordProvider, userId: string): Promise<CommunityRole[]> {
   return (await getGuildMembershipAPI(provider, userId)).roles;
 }

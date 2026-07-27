@@ -1,29 +1,32 @@
 import type { DiscordProvider } from './main';
 import { CommunityProviderError } from '../error';
-import {
-  DiscordMessage,
-  DiscordMessageSchema,
-  DiscordReactionUser,
-  DiscordReactionUserSchema,
+import type {
+  CommunityMessage,
+  CommunityReactionUser,
   SendMessageInput,
-  SendMessageInputSchema,
-  SendMessageResult,
-  SendMessageResultSchema
+  SendMessageResult
 } from '../type';
+import { SendMessageResultSchema } from '../type';
+import {
+  DISCORD_MESSAGE_CONTENT_LIMIT,
+  DiscordMessageSchema,
+  DiscordReactionUserSchema,
+  DiscordSendMessageInputSchema
+} from './schema';
 
 // チャンネルへメッセージを送信し、送信したメッセージIDを返す
 export async function sendMessageAPI(
   provider: DiscordProvider,
   input: SendMessageInput
 ): Promise<SendMessageResult> {
-  const parsedInput = SendMessageInputSchema.parse(input);
+  const parsedInput = DiscordSendMessageInputSchema.parse(input);
   const roleIds = parsedInput.mentionRoleIds ?? [];
 
   // メンション対象のロールをメッセージ本文に埋め込む（<@&ロールID>）
   const mentions = roleIds.map((id) => `<@&${id}>`).join(' ');
   const content = mentions ? `${mentions} ${parsedInput.content}` : parsedInput.content;
 
-  if (content.length > 2000) {
+  if (content.length > DISCORD_MESSAGE_CONTENT_LIMIT) {
     throw new CommunityProviderError('Discord message content is too long', 400, 'discord');
   }
 
@@ -46,7 +49,7 @@ export async function getMessageAPI(
   provider: DiscordProvider,
   channelId: string,
   messageId: string
-): Promise<DiscordMessage> {
+): Promise<CommunityMessage> {
   const message = await provider.request<any>(
     'GET',
     `/channels/${channelId}/messages/${messageId}`
@@ -60,7 +63,7 @@ export async function getMessageAPI(
     author: {
       id: message.author.id,
       username: message.author.username,
-      globalName: message.author.global_name ?? null,
+      displayName: message.author.global_name ?? null,
       bot: message.author.bot ?? false,
     },
     reactions: (message.reactions ?? []).map((reaction: any) => ({
@@ -75,8 +78,8 @@ export async function listMessageReactionUsersAPI(
   channelId: string,
   messageId: string,
   emoji: string
-): Promise<DiscordReactionUser[]> {
-  const users: DiscordReactionUser[] = [];
+): Promise<CommunityReactionUser[]> {
+  const users: CommunityReactionUser[] = [];
   let after: string | undefined;
 
   while (true) {
@@ -92,7 +95,7 @@ export async function listMessageReactionUsersAPI(
       DiscordReactionUserSchema.parse({
         id: user.id,
         username: user.username,
-        globalName: user.global_name ?? null,
+        displayName: user.global_name ?? null,
         bot: user.bot ?? false,
       })
     );

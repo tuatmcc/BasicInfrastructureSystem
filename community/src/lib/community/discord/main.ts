@@ -1,5 +1,5 @@
 import type { CommunityProvider } from '../interface';
-import type { DiscordGuildMembership, DiscordMessage, DiscordReactionUser, Role, SendMessageInput, SendMessageResult } from '../type';
+import type { CommunityMembership, CommunityMessage, CommunityReactionUser, CommunityRole, SendMessageInput, SendMessageResult } from '../type';
 import { CommunityProviderError } from '../error';
 import { getGuildMembershipAPI, listUserRolesAPI } from './role';
 import { getMessageAPI, listMessageReactionUsersAPI, sendMessageAPI } from './message';
@@ -31,11 +31,11 @@ export class DiscordProvider implements CommunityProvider {
     return response.json();
   }
 
-  async listUserRoles(userId: string): Promise<Role[]> {
+  async listUserRoles(userId: string): Promise<CommunityRole[]> {
     return listUserRolesAPI(this, userId);
   }
 
-  async getGuildMembership(userId: string): Promise<DiscordGuildMembership> {
+  async getGuildMembership(userId: string): Promise<CommunityMembership> {
     return getGuildMembershipAPI(this, userId);
   }
 
@@ -43,11 +43,11 @@ export class DiscordProvider implements CommunityProvider {
     return sendMessageAPI(this, input);
   }
 
-  async getMessage(channelId: string, messageId: string): Promise<DiscordMessage> {
+  async getMessage(channelId: string, messageId: string): Promise<CommunityMessage> {
     return getMessageAPI(this, channelId, messageId);
   }
 
-  async listMessageReactionUsers(channelId: string, messageId: string, emoji: string): Promise<DiscordReactionUser[]> {
+  async listMessageReactionUsers(channelId: string, messageId: string, emoji: string): Promise<CommunityReactionUser[]> {
     return listMessageReactionUsersAPI(this, channelId, messageId, emoji);
   }
 }

@@ -1,5 +1,6 @@
 import { CommunityProviderError } from '../error';
-import { DiscordOAuthUser, DiscordOAuthUserSchema } from '../type';
+import type { CommunityAccountProfile } from '../type';
+import { DiscordAccountProfileSchema } from './schema';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
@@ -22,7 +23,7 @@ const buildDiscordAvatarUrl = (profile: DiscordOAuthProfile): string | null => {
 export const getCurrentDiscordUser = async (
   accessToken: string,
   fetcher: typeof fetch = fetch,
-): Promise<DiscordOAuthUser> => {
+): Promise<CommunityAccountProfile> => {
   const response = await fetcher(`${DISCORD_API_BASE}/users/@me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -41,10 +42,10 @@ export const getCurrentDiscordUser = async (
   }
 
   const profile = await response.json<DiscordOAuthProfile>();
-  const parsed = DiscordOAuthUserSchema.safeParse({
+  const parsed = DiscordAccountProfileSchema.safeParse({
     id: profile.id,
     username: profile.username,
-    globalName: profile.global_name ?? null,
+    displayName: profile.global_name ?? null,
     avatarUrl: buildDiscordAvatarUrl(profile),
   });
 

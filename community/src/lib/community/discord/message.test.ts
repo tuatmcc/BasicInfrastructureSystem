@@ -119,7 +119,7 @@ test('listMessageReactionUsersAPI fetches and parses users who reacted to a mess
     assert.deepEqual(users, [{
         id: '623456789012345678',
         username: 'taro',
-        globalName: 'Taro',
+        displayName: 'Taro',
         bot: false,
     }]);
 });

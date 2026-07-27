@@ -26,7 +26,7 @@ test('getCurrentDiscordUser verifies the bearer token and maps the Discord profi
   assert.deepEqual(user, {
     id: '123456789012345678',
     username: 'club-member',
-    globalName: 'Club Member',
+    displayName: 'Club Member',
     avatarUrl: 'https://cdn.discordapp.com/avatars/123456789012345678/avatar-hash.png',
   });
 });
