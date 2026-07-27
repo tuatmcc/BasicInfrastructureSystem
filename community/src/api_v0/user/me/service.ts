@@ -5,14 +5,15 @@ import { getUserMeRoute, updateUserMeRoute } from "./schema";
 import { eq } from "drizzle-orm";
 import { user } from "../../../../../share/drizzle/schema";
 
+// The authentication store owns these. Membership and role are domain facts and
+// come from the request's already-resolved account, so this service never
+// reaches across the boundary.
 const currentUserSelection = {
     id: user.id,
     name: user.name,
     email: user.email,
     emailVerified: user.emailVerified,
     image: user.image,
-    memberId: user.memberId,
-    role: user.role,
 };
 
 const setPrivateNoStore = (c: Context<AppContext>) => {
@@ -36,7 +37,7 @@ export const getUserMeService: RouteHandler<typeof getUserMeRoute, AppContext> =
         return c.json({ error: "User not found in database" }, 404);
     }
 
-    return c.json(dbUser, 200);
+    return c.json({ ...dbUser, memberId: appUser.memberId, role: appUser.role }, 200);
 };
 
 export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppContext> = async (c) => {
@@ -58,5 +59,5 @@ export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppCont
         return c.json({ error: "User not found in database" }, 404);
     }
 
-    return c.json(updatedUser, 200);
+    return c.json({ ...updatedUser, memberId: appUser.memberId, role: appUser.role }, 200);
 };

@@ -6,6 +6,7 @@ import {
 	foreignKey,
 	index,
 	integer,
+	pgSchema,
 	pgTable,
 	primaryKey,
 	smallint,
@@ -21,8 +22,15 @@ export const memberStatusValues = ["pending", "active", "rejected", "withdrawn"]
 export type MemberStatus = typeof memberStatusValues[number]
 
 // --- Better Auth Tables ---
+//
+// These live in their own schema and hold no domain column, so the
+// authentication store can be moved to its own database. Nothing here may
+// reference an application table: see app_accounts below for the link, and
+// supabase/migrations/20260727000000_split_auth_schema.sql for the boundary.
 
-export const user = pgTable("user", {
+export const appAuth = pgSchema("app_auth")
+
+export const user = appAuth.table("user", {
 	id: text("id").primaryKey(),
 	name: text("name").notNull(),
 	email: text("email").notNull().unique(),
@@ -30,22 +38,9 @@ export const user = pgTable("user", {
 	image: text("image"),
 	createdAt: timestamp("created_at").notNull(),
 	updatedAt: timestamp("updated_at").notNull(),
-	memberId: uuid("member_id"),
-	role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
-}, (table) => [
-	foreignKey({
-		columns: [table.memberId],
-		foreignColumns: [members.memberId],
-		name: "user_member_id_fkey",
-	}).onDelete("set null"),
-	check("user_role_valid", sql`${table.role} in ('user', 'admin')`),
-	uniqueIndex("user_member_id_unique")
-		.on(table.memberId)
-		.where(sql`${table.memberId} is not null`),
-	index("user_member_id_idx").on(table.memberId),
-])
+})
 
-export const session = pgTable("session", {
+export const session = appAuth.table("session", {
 	id: text("id").primaryKey(),
 	expiresAt: timestamp("expires_at").notNull(),
 	token: text("token").notNull().unique(),
@@ -59,7 +54,7 @@ export const session = pgTable("session", {
 	index("session_expires_at_idx").on(table.expiresAt),
 ])
 
-export const account = pgTable("account", {
+export const account = appAuth.table("account", {
 	id: text("id").primaryKey(),
 	accountId: text("account_id").notNull(),
 	providerId: text("provider_id").notNull(),
@@ -78,7 +73,7 @@ export const account = pgTable("account", {
 	index("account_user_id_idx").on(table.userId),
 ])
 
-export const verification = pgTable("verification", {
+export const verification = appAuth.table("verification", {
 	id: text("id").primaryKey(),
 	identifier: text("identifier").notNull(),
 	value: text("value").notNull(),
@@ -90,6 +85,27 @@ export const verification = pgTable("verification", {
 ])
 
 // --- Application Tables ---
+
+// The domain's own record of an authentication subject, and the only thing that
+// links the two sides. userId is an opaque identifier rather than a foreign key
+// so the authentication store stays movable.
+export const appAccounts = pgTable("app_accounts", {
+	userId: text("user_id").primaryKey(),
+	memberId: uuid("member_id"),
+	role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.memberId],
+		foreignColumns: [members.memberId],
+		name: "app_accounts_member_id_fkey",
+	}).onDelete("set null"),
+	unique("app_accounts_member_id_key").on(table.memberId),
+	check("app_accounts_role_valid", sql`${table.role} in ('user', 'admin')`),
+	check("app_accounts_user_id_not_blank", sql`btrim(${table.userId}) <> ''`),
+	index("app_accounts_member_id_idx").on(table.memberId),
+])
 
 export const grades = pgTable("grades", {
 	id: integer("id").primaryKey(),
@@ -124,7 +140,9 @@ export const members = pgTable("members", {
 	applicationVersion: integer("application_version").default(1).notNull(),
 	submittedAt: timestamp("submitted_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "string" }),
-	reviewedByUserId: text("reviewed_by_user_id").references((): AnyPgColumn => user.id, { onDelete: "restrict" }),
+	// Reviewer identity snapshot. Not a foreign key: the authentication store
+	// may move to its own database.
+	reviewedByUserId: text("reviewed_by_user_id"),
 	reviewReason: text("review_reason"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
@@ -212,16 +230,6 @@ export const communityIdentities = pgTable("community_identities", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-	foreignKey({
-		columns: [table.userId],
-		foreignColumns: [user.id],
-		name: "community_identities_user_id_fkey",
-	}).onDelete("cascade"),
-	foreignKey({
-		columns: [table.authAccountId],
-		foreignColumns: [account.id],
-		name: "community_identities_auth_account_id_fkey",
-	}).onDelete("cascade"),
 	check("community_identities_provider_not_blank", sql`btrim(${table.provider}) <> ''`),
 	check("community_identities_account_not_blank", sql`btrim(${table.providerAccountId}) <> ''`),
 	check("community_identities_username_not_blank", sql`btrim(${table.username}) <> ''`),

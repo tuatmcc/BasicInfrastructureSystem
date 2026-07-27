@@ -1,5 +1,10 @@
 -- One-off destructive runbook. This is intentionally NOT a migration.
 --
+-- Ordering matters: this runs before 20260716123951_membership_workflow.sql,
+-- which is itself before the authentication tables move out of public in
+-- 20260727000000_split_auth_schema.sql. The public references below are
+-- therefore correct at the point this file is executed.
+--
 -- Replace every REPLACE_* value with a pipe-separated, fully audited set.
 -- Use the literal EMPTY for an expected empty set. Values must not contain "|"
 -- or "=>". Run as the database migration owner during a maintenance window,

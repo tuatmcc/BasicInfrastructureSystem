@@ -152,23 +152,31 @@ const setupWorkflowDatabase = async () => {
     create unique index members_student_id_unique on members(student_id);
     create unique index members_student_email_unique on members(student_email);
 
-    create table "user" (
+    create schema app_auth;
+    create table app_auth."user" (
       id text primary key,
       name text not null,
       email text not null unique,
       email_verified boolean not null,
       image text,
       created_at timestamp not null,
-      updated_at timestamp not null,
+      updated_at timestamp not null
+    );
+
+    -- Domain-side account record; user_id is a value, not a foreign key.
+    create table app_accounts (
+      user_id text primary key,
       member_id uuid unique references members(member_id),
-      role text not null default 'user'
+      role text not null default 'user',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
     );
 
     create table account (
       id text primary key,
       account_id text not null,
       provider_id text not null,
-      user_id text not null references "user"(id),
+      user_id text not null references app_auth."user"(id),
       access_token text,
       refresh_token text,
       id_token text,
@@ -194,8 +202,8 @@ const setupWorkflowDatabase = async () => {
 
     create table community_identities (
       identity_id uuid primary key default gen_random_uuid(),
-      user_id text not null references "user"(id),
-      auth_account_id text not null unique references account(id),
+      user_id text not null,
+      auth_account_id text not null unique,
       provider text not null,
       provider_account_id text not null,
       username text not null,
@@ -234,9 +242,12 @@ const setupWorkflowDatabase = async () => {
     insert into grades(id, code, display_grade, sort_order) values
       (1, 'B1', 'B1', 10),
       (2, 'B2', 'B2', 20);
-    insert into "user"(id, name, email, email_verified, created_at, updated_at, role) values
-      ('test-admin', 'Admin', 'admin@example.test', true, now(), now(), 'admin'),
-      ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now(), 'user');
+    insert into app_auth."user"(id, name, email, email_verified, created_at, updated_at) values
+      ('test-admin', 'Admin', 'admin@example.test', true, now(), now()),
+      ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now());
+    insert into app_accounts(user_id, role) values
+      ('test-admin', 'admin'),
+      ('test-applicant', 'user');
     insert into account(id, account_id, provider_id, user_id, created_at, updated_at) values
       ('discord-account', 'discord-user-1', 'discord', 'test-applicant', now(), now());
     insert into community_identities(
@@ -275,15 +286,16 @@ const setupWorkflowDatabase = async () => {
       from member_directory_profiles profile
       join members member on member.member_id = profile.member_id
       join grades grade on grade.id = member.grade_id
-      join "user" app_user on app_user.member_id = member.member_id
-      join community_identities identity on identity.user_id = app_user.id
+      join app_accounts account on account.member_id = member.member_id
+      join community_identities identity on identity.user_id = account.user_id
       join community_memberships membership on membership.identity_id = identity.identity_id
       where profile.directory_visible and member.member_status = 'active';
 
-    grant usage on schema public, app_api to app_rls;
+    grant usage on schema public, app_api, app_auth to app_rls;
     grant select on grades to app_rls;
     grant select, insert, update on members, member_directory_profiles to app_rls;
-    grant select, update on "user" to app_rls;
+    grant select on app_auth."user" to app_rls;
+    grant select, insert, update on app_accounts to app_rls;
     grant select on account, community_identities, community_memberships, member_status_history to app_rls;
     grant update on community_identities to app_rls;
     grant insert, update on community_memberships to app_rls;
@@ -292,7 +304,8 @@ const setupWorkflowDatabase = async () => {
     alter table grades enable row level security;
     alter table members enable row level security;
     alter table member_directory_profiles enable row level security;
-    alter table "user" enable row level security;
+    alter table app_auth."user" enable row level security;
+    alter table app_accounts enable row level security;
     alter table account enable row level security;
     alter table community_identities enable row level security;
     alter table community_memberships enable row level security;
@@ -301,7 +314,8 @@ const setupWorkflowDatabase = async () => {
     create policy grades_read on grades for select to app_rls using (
       current_setting('app.current_user_id', true) <> ''
     );
-    create policy users_all on "user" for all to app_rls using (true) with check (true);
+    create policy users_all on app_auth."user" for all to app_rls using (true) with check (true);
+    create policy accounts_all on app_accounts for all to app_rls using (true) with check (true);
     create policy account_read on account for select to app_rls using (true);
     create policy members_read on members for select to app_rls using (
       current_setting('app.current_user_role', true) = 'admin'
@@ -369,7 +383,7 @@ test('membership application uses one versioned row through reject, resubmit, ap
     const memberId = pending.memberId
 
     await client.exec('reset role')
-    const linked = await client.query<{ member_id: string }>(`select member_id from "user" where id = 'test-applicant'`)
+    const linked = await client.query<{ member_id: string }>(`select member_id from app_accounts where user_id = 'test-applicant'`)
     assert.equal(linked.rows[0].member_id, memberId)
     const initialProfileCount = await client.query<{ count: number }>('select count(*)::int as count from member_directory_profiles')
     assert.equal(initialProfileCount.rows[0].count, 0)
@@ -598,7 +612,7 @@ test('empty RLS context can use auth tables but cannot read business data', asyn
       select set_config('app.current_user_role', '', true);
     `)
     const authUsers = await client.query<{ count: number }>(
-      'select count(*)::int as count from "user"',
+      'select count(*)::int as count from app_auth."user"',
     )
     const gradeRows = await client.query<{ count: number }>(
       'select count(*)::int as count from grades',
@@ -735,22 +749,29 @@ test('development auth reloads memberId and downstream failures remain server er
     await client.exec(`
       create role app_rls;
       create table members (member_id uuid primary key);
-      create table "user" (
+      create schema app_auth;
+      create table app_auth."user" (
         id text primary key,
-        name text not null,
+        name text not null
+      );
+      create table app_accounts (
+        user_id text primary key,
         member_id uuid references members(member_id),
         role text default 'user' not null
       );
-      create table session (
+      create table app_auth.session (
         id text primary key,
-        user_id text not null references "user"(id),
+        user_id text not null references app_auth."user"(id),
         expires_at timestamp not null
       );
       insert into members values ('${memberId}');
-      insert into "user" values ('user-1', 'test-user', '${memberId}', 'user');
-      insert into session values ('session-1', 'user-1', now() + interval '1 hour');
+      insert into app_auth."user" values ('user-1', 'test-user');
+      insert into app_accounts values ('user-1', '${memberId}', 'user');
+      insert into app_auth.session values ('session-1', 'user-1', now() + interval '1 hour');
       grant app_rls to current_user;
-      grant select on "user", session to app_rls;
+      grant usage on schema app_auth to app_rls;
+      grant select on app_auth."user", app_auth.session to app_rls;
+      grant select on app_accounts to app_rls;
       set role app_rls;
     `)
     const db = createRlsDatabase(drizzle(client) as never)

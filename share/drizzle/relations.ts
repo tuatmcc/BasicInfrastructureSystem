@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm/relations"
 import {
 	account,
+	appAccounts,
 	communityIdentities,
 	communityMemberships,
 	grades,
@@ -11,17 +12,14 @@ import {
 	user,
 } from "./schema"
 
-export const userRelations = relations(user, ({ many, one }) => ({
-	member: one(members, {
-		fields: [user.memberId],
-		references: [members.memberId],
-		relationName: "userMember",
-	}),
+// Relations never cross between app_auth and the domain. The authentication
+// tables relate only to each other, and the domain reaches an authentication
+// subject through app_accounts, which stores the identifier as a plain value.
+// See supabase/migrations/20260727000000_split_auth_schema.sql.
+
+export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
 	accounts: many(account),
-	reviewedMembers: many(members, { relationName: "memberReviewer" }),
-	communityIdentities: many(communityIdentities),
-	memberStatusChanges: many(memberStatusHistory, { relationName: "memberStatusChangedBy" }),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -36,7 +34,13 @@ export const accountRelations = relations(account, ({ one }) => ({
 		fields: [account.userId],
 		references: [user.id],
 	}),
-	communityIdentity: one(communityIdentities),
+}))
+
+export const appAccountsRelations = relations(appAccounts, ({ one }) => ({
+	member: one(members, {
+		fields: [appAccounts.memberId],
+		references: [members.memberId],
+	}),
 }))
 
 export const gradesRelations = relations(grades, ({ many }) => ({
@@ -48,11 +52,7 @@ export const membersRelations = relations(members, ({ many, one }) => ({
 		fields: [members.grade],
 		references: [grades.id],
 	}),
-	reviewedBy: one(user, {
-		fields: [members.reviewedByUserId],
-		references: [user.id],
-		relationName: "memberReviewer",
-	}),
+	account: one(appAccounts),
 	directoryProfile: one(memberDirectoryProfiles),
 	statusHistory: many(memberStatusHistory),
 }))
@@ -64,15 +64,7 @@ export const memberDirectoryProfilesRelations = relations(memberDirectoryProfile
 	}),
 }))
 
-export const communityIdentitiesRelations = relations(communityIdentities, ({ many, one }) => ({
-	user: one(user, {
-		fields: [communityIdentities.userId],
-		references: [user.id],
-	}),
-	authAccount: one(account, {
-		fields: [communityIdentities.authAccountId],
-		references: [account.id],
-	}),
+export const communityIdentitiesRelations = relations(communityIdentities, ({ many }) => ({
 	memberships: many(communityMemberships),
 }))
 
@@ -87,10 +79,5 @@ export const memberStatusHistoryRelations = relations(memberStatusHistory, ({ on
 	member: one(members, {
 		fields: [memberStatusHistory.memberId],
 		references: [members.memberId],
-	}),
-	changedBy: one(user, {
-		fields: [memberStatusHistory.changedByUserId],
-		references: [user.id],
-		relationName: "memberStatusChangedBy",
 	}),
 }))

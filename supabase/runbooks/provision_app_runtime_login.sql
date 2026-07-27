@@ -85,6 +85,13 @@ begin
   execute format('revoke all on all tables in schema public from %I', runtime_role);
   execute format('revoke all on all sequences in schema public from %I', runtime_role);
   execute format('revoke execute on all functions in schema public from %I', runtime_role);
+  -- app_auth only exists once the authentication tables have been split out,
+  -- so this stays optional for a database that has not reached that migration.
+  if exists (select 1 from pg_namespace where nspname = 'app_auth') then
+    execute format('revoke all on schema app_auth from %I', runtime_role);
+    execute format('revoke all on all tables in schema app_auth from %I', runtime_role);
+    execute format('revoke all on all sequences in schema app_auth from %I', runtime_role);
+  end if;
   execute format('revoke all on all tables in schema app_private from %I', runtime_role);
   execute format('revoke all on all sequences in schema app_private from %I', runtime_role);
   execute format('revoke execute on all functions in schema app_private from %I', runtime_role);

@@ -4,12 +4,14 @@ import {
   and,
   desc,
   eq,
+  inArray,
   isNull,
   or,
   sql,
   type SQL,
 } from 'drizzle-orm'
 import {
+  appAccounts,
   grades,
   memberDirectoryProfiles,
   members,
@@ -74,8 +76,7 @@ const memberSelection = {
   currentActivities: memberDirectoryProfiles.currentActivities,
   bio: memberDirectoryProfiles.bio,
   directoryVisible: memberDirectoryProfiles.directoryVisible,
-  userId: user.id,
-  userEmail: user.email,
+  userId: appAccounts.userId,
 }
 
 const selectMemberRows = async (
@@ -87,7 +88,7 @@ const selectMemberRows = async (
     .select(memberSelection)
     .from(members)
     .innerJoin(grades, eq(grades.id, members.grade))
-    .innerJoin(user, eq(user.memberId, members.memberId))
+    .innerJoin(appAccounts, eq(appAccounts.memberId, members.memberId))
     .leftJoin(memberDirectoryProfiles, eq(memberDirectoryProfiles.memberId, members.memberId))
     .where(where)
     .orderBy(desc(members.submittedAt), desc(members.memberId))
@@ -147,10 +148,26 @@ const toMemberResponse = (row: MemberRow, evidence: DiscordMembershipEvidence | 
   discord: toDiscordResponse(evidence),
 })
 
-const toAdminMemberResponse = (row: MemberRow, evidence: DiscordMembershipEvidence | null) => ({
+// The account email belongs to the authentication store. It is looked up by id
+// instead of joined, so it becomes a remote call if that store moves to its own
+// database.
+const readAuthEmails = async (db: QueryDatabase, userIds: string[]) => {
+  if (userIds.length === 0) return new Map<string, string>()
+  const rows = await db
+    .select({ id: user.id, email: user.email })
+    .from(user)
+    .where(inArray(user.id, userIds))
+  return new Map(rows.map(row => [row.id, row.email]))
+}
+
+const toAdminMemberResponse = (
+  row: MemberRow,
+  evidence: DiscordMembershipEvidence | null,
+  userEmail: string,
+) => ({
   ...toMemberResponse(row, evidence),
   userId: row.userId,
-  userEmail: row.userEmail,
+  userEmail,
 })
 
 const setPrivateNoStore = (c: Context<AppContext>) => {
@@ -315,10 +332,10 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
       })
 
       const linkedUsers = await tx
-        .update(user)
-        .set({ memberId, updatedAt: new Date() })
-        .where(and(eq(user.id, appUser.id), isNull(user.memberId)))
-        .returning({ id: user.id })
+        .update(appAccounts)
+        .set({ memberId, updatedAt: new Date().toISOString() })
+        .where(and(eq(appAccounts.userId, appUser.id), isNull(appAccounts.memberId)))
+        .returning({ id: appAccounts.userId })
       if (linkedUsers.length !== 1) throw new MemberLinkConflictError()
 
       return loadMemberRow(tx, memberId)
@@ -556,7 +573,7 @@ export const listAdminMembersService: RouteHandler<typeof listAdminMembersRoute,
   const guildId = requireGuildId(c)
   // The page and its evidence are read in one transaction: both are pure reads,
   // so a member cannot change status between the two queries.
-  const { pageRows, hasNextPage, evidenceByUserId } = await db.transaction(async (tx) => {
+  const { pageRows, hasNextPage, evidenceByUserId, emailByUserId } = await db.transaction(async (tx) => {
     const rows = await selectMemberRows(
       tx,
       conditions.length ? and(...conditions) : undefined,
@@ -572,11 +589,16 @@ export const listAdminMembersService: RouteHandler<typeof listAdminMembersRoute,
         page.map(row => row.userId),
         guildId,
       ),
+      emailByUserId: await readAuthEmails(tx, page.map(row => row.userId)),
     }
   })
 
   return c.json({
-    items: pageRows.map(row => toAdminMemberResponse(row, evidenceByUserId.get(row.userId) ?? null)),
+    items: pageRows.map(row => toAdminMemberResponse(
+      row,
+      evidenceByUserId.get(row.userId) ?? null,
+      emailByUserId.get(row.userId) ?? '',
+    )),
     nextCursor: hasNextPage && pageRows.length > 0 ? encodeCursor(pageRows[pageRows.length - 1]) : null,
   }, 200)
 }
@@ -598,6 +620,7 @@ export const getAdminMemberService: RouteHandler<typeof getAdminMemberRoute, App
     return {
       row,
       evidence: await readDiscordMembershipEvidence(tx, row.userId, guildId),
+      email: (await readAuthEmails(tx, [row.userId])).get(row.userId) ?? '',
       history: await tx
         .select({
           fromStatus: memberStatusHistory.fromStatus,
@@ -612,10 +635,10 @@ export const getAdminMemberService: RouteHandler<typeof getAdminMemberRoute, App
     }
   })
   if (!detail) return c.json({ error: 'Member was not found', code: 'member_not_found' }, 404)
-  const { row, evidence, history } = detail
+  const { row, evidence, history, email } = detail
 
   return c.json({
-    ...toAdminMemberResponse(row, evidence),
+    ...toAdminMemberResponse(row, evidence, email),
     statusHistory: history.map(item => ({
       ...item,
       fromStatus: item.fromStatus as MemberStatus | null,
@@ -722,13 +745,13 @@ export const createApproveMemberService = (
       if (updated.length !== 1) throw new MemberVersionConflictError()
 
       const linked = await tx
-        .update(user)
-        .set({ memberId, updatedAt: now })
+        .update(appAccounts)
+        .set({ memberId, updatedAt: now.toISOString() })
         .where(and(
-          eq(user.id, current.userId),
-          or(isNull(user.memberId), eq(user.memberId, memberId)),
+          eq(appAccounts.userId, current.userId),
+          or(isNull(appAccounts.memberId), eq(appAccounts.memberId, memberId)),
         ))
-        .returning({ id: user.id })
+        .returning({ id: appAccounts.userId })
       if (linked.length !== 1) throw new MemberLinkConflictError()
 
       await tx.insert(memberDirectoryProfiles).values({
@@ -756,9 +779,13 @@ export const createApproveMemberService = (
     throw error
   }
 
-  const approved = await db.transaction((tx) => loadMemberRow(tx, memberId))
+  const approved = await db.transaction(async (tx) => {
+    const row = await loadMemberRow(tx, memberId)
+    if (!row) return null
+    return { row, email: (await readAuthEmails(tx, [row.userId])).get(row.userId) ?? '' }
+  })
   if (!approved) throw new Error('Approved member could not be reloaded')
-  return c.json(toAdminMemberResponse(approved, evidence), 200)
+  return c.json(toAdminMemberResponse(approved.row, evidence, approved.email), 200)
 }
 
 export const approveMemberService = createApproveMemberService()
@@ -881,9 +908,13 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
     throw error
   }
 
-  const result = await db.transaction((tx) => loadResponseForMember(tx, memberId, requireGuildId(c)))
+  const result = await db.transaction(async (tx) => {
+    const loaded = await loadResponseForMember(tx, memberId, requireGuildId(c))
+    if (!loaded) return null
+    return { ...loaded, email: (await readAuthEmails(tx, [loaded.row.userId])).get(loaded.row.userId) ?? '' }
+  })
   if (!result) throw new Error('Updated member could not be reloaded')
-  return c.json(toAdminMemberResponse(result.row, result.evidence), 200)
+  return c.json(toAdminMemberResponse(result.row, result.evidence, result.email), 200)
 }
 
 export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppContext> = async (c) => {
@@ -939,7 +970,11 @@ export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppCont
     throw error
   }
 
-  const result = await db.transaction((tx) => loadResponseForMember(tx, memberId, requireGuildId(c)))
+  const result = await db.transaction(async (tx) => {
+    const loaded = await loadResponseForMember(tx, memberId, requireGuildId(c))
+    if (!loaded) return null
+    return { ...loaded, email: (await readAuthEmails(tx, [loaded.row.userId])).get(loaded.row.userId) ?? '' }
+  })
   if (!result) throw new Error('Rejected member could not be reloaded')
-  return c.json(toAdminMemberResponse(result.row, result.evidence), 200)
+  return c.json(toAdminMemberResponse(result.row, result.evidence, result.email), 200)
 }

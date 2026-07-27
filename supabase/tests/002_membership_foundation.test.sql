@@ -17,17 +17,24 @@ select hasnt_column('public', 'grades', 'year', 'grade is not year-specific');
 select col_is_pk('public', 'member_directory_profiles', 'member_id', 'directory profile is one-to-one');
 select has_index('public', 'members', 'members_student_id_unique', 'student ID is individually unique');
 select has_index('public', 'members', 'members_student_email_unique', 'student email is individually unique');
-select has_index('public', 'account', 'account_provider_account_unique', 'provider account is unique');
+select has_index('app_auth', 'account', 'account_provider_account_unique', 'provider account is unique');
 
+-- The reviewer is stored as a snapshot, like member_status_history's actor. A
+-- foreign key here would tie the domain to the authentication store and block
+-- moving it to its own database.
 select is(
   (
-    select confdeltype::text
-    from pg_constraint
-    where conrelid = 'public.members'::regclass
-      and conname = 'members_reviewed_by_user_id_fkey'
+    select count(*)::integer
+    from pg_constraint constraint_record
+    join pg_attribute column_record
+      on column_record.attrelid = constraint_record.conrelid
+     and column_record.attnum = any (constraint_record.conkey)
+    where constraint_record.conrelid = 'public.members'::regclass
+      and constraint_record.contype = 'f'
+      and column_record.attname = 'reviewed_by_user_id'
   ),
-  'r'::text,
-  'reviewed users cannot be deleted while a membership review references them'
+  0,
+  'reviewer IDs are snapshots without a foreign key into the auth store'
 );
 
 select is(
@@ -85,10 +92,10 @@ select is(
     select count(*)::integer
     from pg_class
     where oid in (
-      'public."user"'::regclass,
-      'public.account'::regclass,
-      'public.session'::regclass,
-      'public.verification'::regclass,
+      'app_auth."user"'::regclass,
+      'app_auth.account'::regclass,
+      'app_auth.session'::regclass,
+      'app_auth.verification'::regclass,
       'public.grades'::regclass,
       'public.members'::regclass,
       'public.member_directory_profiles'::regclass,
@@ -107,10 +114,10 @@ select is(
     select count(*)::integer
     from pg_class
     where oid in (
-      'public."user"'::regclass,
-      'public.account'::regclass,
-      'public.session'::regclass,
-      'public.verification'::regclass,
+      'app_auth."user"'::regclass,
+      'app_auth.account'::regclass,
+      'app_auth.session'::regclass,
+      'app_auth.verification'::regclass,
       'public.grades'::regclass,
       'public.members'::regclass,
       'public.member_directory_profiles'::regclass,

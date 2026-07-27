@@ -13,6 +13,10 @@ const membershipWorkflowMigrationPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../supabase/migrations/20260716123951_membership_workflow.sql',
 )
+const splitAuthSchemaMigrationPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../supabase/migrations/20260727000000_split_auth_schema.sql',
+)
 const confirmedTestDataPurgeRunbookPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../supabase/runbooks/purge_confirmed_test_membership_data.sql',
@@ -596,6 +600,62 @@ test('membership workflow fresh replay does not require Supabase API roles', asy
       members: 0,
       workflow_guard_exists: true,
     })
+  } finally {
+    await client.close()
+  }
+})
+
+test('splitting the auth schema leaves no reference from the domain into app_auth', async () => {
+  const client = await PGlite.create()
+
+  try {
+    await createCurrentSchema(client, false)
+    await client.exec(await readFile(membershipWorkflowMigrationPath, 'utf8'))
+    await client.exec(await readFile(splitAuthSchemaMigrationPath, 'utf8'))
+
+    const layout = await client.query<{
+      auth_tables: number
+      public_auth_tables: number
+      accounts_exists: boolean
+      user_has_domain_columns: number
+    }>(`
+      select
+        (select count(*)::int from pg_tables
+          where schemaname = 'app_auth'
+            and tablename in ('user', 'session', 'account', 'verification')) as auth_tables,
+        (select count(*)::int from pg_tables
+          where schemaname = 'public'
+            and tablename in ('user', 'session', 'account', 'verification')) as public_auth_tables,
+        to_regclass('public.app_accounts') is not null as accounts_exists,
+        (select count(*)::int from information_schema.columns
+          where table_schema = 'app_auth'
+            and table_name = 'user'
+            and column_name in ('member_id', 'role')) as user_has_domain_columns
+    `)
+    assert.deepEqual(layout.rows[0], {
+      auth_tables: 4,
+      public_auth_tables: 0,
+      accounts_exists: true,
+      user_has_domain_columns: 0,
+    })
+
+    // A foreign key cannot span databases. If one is ever added across this
+    // boundary, moving the authentication store becomes a schema migration
+    // again, so the absence is asserted rather than left to review.
+    const crossings = await client.query<{ constraint_name: string }>(`
+      select con.conname as constraint_name
+      from pg_constraint con
+      join pg_class child on child.oid = con.conrelid
+      join pg_namespace child_ns on child_ns.oid = child.relnamespace
+      join pg_class parent on parent.oid = con.confrelid
+      join pg_namespace parent_ns on parent_ns.oid = parent.relnamespace
+      where con.contype = 'f'
+        and (
+          (child_ns.nspname = 'public' and parent_ns.nspname = 'app_auth')
+          or (child_ns.nspname = 'app_auth' and parent_ns.nspname = 'public')
+        )
+    `)
+    assert.deepEqual(crossings.rows, [])
   } finally {
     await client.close()
   }
