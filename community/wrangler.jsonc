@@ -40,7 +40,10 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
+	// A deployed Worker is production. Stated explicitly so the development
+	// authentication bypass cannot be reached by an unset variable; local
+	// development overrides this through .dev.vars.
+	"vars": { "NODE_ENV": "production" },
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

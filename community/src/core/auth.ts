@@ -85,11 +85,27 @@ const loadAppUser = async (
   return resolved;
 }
 
+// The development bypass skips token verification entirely, so reaching it on a
+// deployed Worker would leave the API open. NODE_ENV is an ordinary variable
+// that a misconfigured deployment can carry, but the hostname the request
+// actually arrived on is not, so both must agree before the bypass applies.
+const isLocalRequest = (c: Context<AppContext>) => {
+  try {
+    const hostname = new URL(c.req.url).hostname
+    return hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || hostname === '[::1]'
+  } catch {
+    return false
+  }
+}
+
 export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
   let userId: string;
   let sessionId: string | undefined;
 
-  if (c.env.NODE_ENV === 'development') {
+  if (c.env.NODE_ENV === 'development' && isLocalRequest(c)) {
     const developmentUserId = c.env.DEV_USER_ID?.trim();
     if (!developmentUserId) {
       return c.json({ error: 'Development authentication requires DEV_USER_ID' }, 500);
