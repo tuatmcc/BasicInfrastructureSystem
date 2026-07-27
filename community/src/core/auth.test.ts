@@ -9,21 +9,18 @@ test('auth middleware reloads the application user and does not turn downstream 
   let capturedUser: appUser | undefined;
   let capturedIdentity: unknown;
 
+  // The middleware asks the authentication store who the caller is, then asks
+  // the domain what that subject may do. Two selects, never a join across them.
+  let selectCall = 0;
   const transaction = {
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            limit: async () => [{
-              id: 'user-1',
-              name: 'Test User',
-              memberId: null,
-              role: 'user',
-            }],
-          }),
-        }),
-      }),
-    }),
+    select: () => {
+      selectCall += 1;
+      const rows = selectCall === 1
+        ? [{ id: 'user-1', name: 'Test User' }]
+        : [{ memberId: null, role: 'user' }];
+      const where = () => ({ limit: async () => rows });
+      return { from: () => ({ innerJoin: () => ({ where }), where }) };
+    },
   };
   const db = {
     transaction: (operation: (tx: unknown) => Promise<unknown>) => operation(transaction),

@@ -8,6 +8,7 @@ import {
     listMessagesRoute
 } from "./schema"
 import {
+    appAccounts,
     communityIdentities,
     communityMemberships,
     eventMessages,
@@ -141,14 +142,15 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
 
         const discordUserIds = collectDiscordUserIds(reactionUsersByEmoji);
 
-        const linkedUsers: LinkedReactionUser[] = discordUserIds.length > 0
+        // Everything the domain knows about the members who reacted. The
+        // authentication subject is already recorded on the identity row, so
+        // this query stays inside the domain schema.
+        const domainRows = discordUserIds.length > 0
             ? await db.transaction((tx) => tx
                 .select({
                     discordUserId: communityIdentities.providerAccountId,
-                    userId: authUsers.id,
-                    userName: authUsers.name,
-                    email: authUsers.email,
-                    memberId: authUsers.memberId,
+                    userId: communityIdentities.userId,
+                    memberId: appAccounts.memberId,
                     memberName: members.name,
                     memberStatus: members.memberStatus,
                     displayName: memberDirectoryProfiles.displayName,
@@ -167,8 +169,8 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
                     discordRoles: communityMemberships.roleNames,
                 })
                 .from(communityIdentities)
-                .innerJoin(authUsers, eq(communityIdentities.userId, authUsers.id))
-                .leftJoin(members, eq(authUsers.memberId, members.memberId))
+                .leftJoin(appAccounts, eq(communityIdentities.userId, appAccounts.userId))
+                .leftJoin(members, eq(appAccounts.memberId, members.memberId))
                 .leftJoin(grades, eq(members.grade, grades.id))
                 .leftJoin(memberDirectoryProfiles, eq(members.memberId, memberDirectoryProfiles.memberId))
                 .leftJoin(communityMemberships, and(
@@ -180,6 +182,24 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
                     inArray(communityIdentities.providerAccountId, discordUserIds),
                 )))
             : [];
+
+        // The account name and email belong to the authentication store. This is
+        // a separate query rather than a join, so it becomes a remote call if
+        // that store moves to its own database.
+        const subjectIds = domainRows.map((row) => row.userId);
+        const subjects = subjectIds.length > 0
+            ? await db.transaction((tx) => tx
+                .select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+                .from(authUsers)
+                .where(inArray(authUsers.id, subjectIds)))
+            : [];
+        const subjectById = new Map(subjects.map((subject) => [subject.id, subject]));
+
+        const linkedUsers: LinkedReactionUser[] = domainRows.map((row) => ({
+            ...row,
+            userName: subjectById.get(row.userId)?.name ?? "",
+            email: subjectById.get(row.userId)?.email ?? "",
+        }));
 
         const summary = buildMessageReactionSummary(
             eventMessage,

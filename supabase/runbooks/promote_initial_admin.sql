@@ -37,10 +37,11 @@ begin
     raise exception 'expected exactly one verified Discord/guild identity, found %', matched_count;
   end if;
 
-  update public."user"
+  -- role is a domain fact and lives in app_accounts, not in the auth store.
+  update public.app_accounts
   set role = 'admin',
       updated_at = now()
-  where id = matched_user_id
+  where user_id = matched_user_id
     and role = 'user';
 
   if not found then

@@ -21,11 +21,24 @@ export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
         trustedOrigins: [
             c.env.FRONTEND_URL || "http://localhost:3000"
         ],
-        user: {
-            additionalFields: {
-                memberId: { type: "string", required: false, input: false },
-                role: { type: "string", defaultValue: "user", input: false }
-            }
+        // No additionalFields: membership and role belong to the domain and live
+        // in public.app_accounts, so Better Auth owns its tables outright and
+        // they can be moved to their own database.
+        databaseHooks: {
+            user: {
+                create: {
+                    // A subject only becomes usable once the domain has its own
+                    // record of it. Creating it here keeps the write in the
+                    // boundary layer instead of a trigger that would make the
+                    // authentication schema depend on the domain again.
+                    after: async (createdUser) => {
+                        await db
+                            .insert(schema.appAccounts)
+                            .values({ userId: createdUser.id })
+                            .onConflictDoNothing();
+                    },
+                },
+            },
         },
         account: {
             encryptOAuthTokens: true,
@@ -96,18 +109,20 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
     }
 
     try {
+        // Better Auth proved who the caller is; the domain decides what the JWT
+        // may claim, so role and membership are read from app_accounts.
         const authDb = getAuthDatabase(c);
         const [currentUser] = await authDb
             .select({
-                role: schema.user.role,
-                memberId: schema.user.memberId,
+                role: schema.appAccounts.role,
+                memberId: schema.appAccounts.memberId,
             })
-            .from(schema.user)
-            .where(eq(schema.user.id, session.user.id))
+            .from(schema.appAccounts)
+            .where(eq(schema.appAccounts.userId, session.user.id))
             .limit(1);
 
         if (!currentUser) {
-            console.error("[JWT Endpoint] Authenticated user was not found in the application database.");
+            console.error("[JWT Endpoint] Authenticated user has no application account.");
             return c.redirect(`${frontendUrl}/login?error=user_not_found`);
         }
 

@@ -12,12 +12,17 @@ grant execute on all functions in schema extensions to app_rls;
 
 set local role app_rls;
 
-insert into public."user" (
-  id, name, email, email_verified, created_at, updated_at, role
+insert into app_auth."user" (
+  id, name, email, email_verified, created_at, updated_at
 ) values
-  ('test-admin', 'Admin', 'admin@example.test', true, now(), now(), 'admin'),
-  ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now(), 'user'),
-  ('test-viewer', 'Viewer', 'viewer@example.test', true, now(), now(), 'user');
+  ('test-admin', 'Admin', 'admin@example.test', true, now(), now()),
+  ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now()),
+  ('test-viewer', 'Viewer', 'viewer@example.test', true, now(), now());
+
+insert into public.app_accounts (user_id, role) values
+  ('test-admin', 'admin'),
+  ('test-applicant', 'user'),
+  ('test-viewer', 'user');
 
 select
   set_config('app.current_user_id', 'test-admin', true),
@@ -51,9 +56,9 @@ select lives_ok(
           application_version = application_version + 1
       where member_id = '00000000-0000-4000-8000-000000000002';
 
-      update public."user"
+      update public.app_accounts
       set member_id = '00000000-0000-4000-8000-000000000002'
-      where id = 'test-viewer';
+      where user_id = 'test-viewer';
 
       insert into public.member_directory_profiles (
         member_id,
@@ -132,9 +137,9 @@ select lives_ok(
         'applicant@student.example'
       );
 
-      update public."user"
+      update public.app_accounts
       set member_id = '00000000-0000-4000-8000-000000000001'
-      where id = 'test-applicant';
+      where user_id = 'test-applicant';
     end
     $body$
   $$,
@@ -329,14 +334,14 @@ select
   set_config('app.current_user_role', 'admin', true);
 
 select throws_ok(
-  $$delete from public."user" where id = 'test-admin'$$,
+  $$delete from app_auth."user" where id = 'test-admin'$$,
   '23503',
   null,
   'a reviewer account cannot be deleted while reviewed memberships reference it'
 );
 
 select lives_ok(
-  $$delete from public."user" where id = 'test-applicant'$$,
+  $$delete from app_auth."user" where id = 'test-applicant'$$,
   'deleting an authentication account does not rewrite immutable actor snapshots'
 );
 

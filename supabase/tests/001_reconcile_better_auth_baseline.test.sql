@@ -5,15 +5,15 @@ set local search_path = public, extensions, pg_catalog;
 
 select plan(16);
 
-select has_table('public', 'user', 'Better Auth user table exists');
-select has_table('public', 'account', 'Better Auth account table exists');
-select has_table('public', 'session', 'Better Auth session table exists');
-select has_table('public', 'verification', 'Better Auth verification table exists');
+select has_table('app_auth', 'user', 'Better Auth user table exists');
+select has_table('app_auth', 'account', 'Better Auth account table exists');
+select has_table('app_auth', 'session', 'Better Auth session table exists');
+select has_table('app_auth', 'verification', 'Better Auth verification table exists');
 select has_table('public', 'grades', 'grade table exists');
 select has_table('public', 'members', 'member table exists');
 select has_table('public', 'event_messages', 'event message table exists');
-select has_index('public', 'account', 'account_provider_account_unique', 'provider account is unique');
-select has_index('public', 'user', 'user_member_id_unique', 'a member links to at most one app user');
+select has_index('app_auth', 'account', 'account_provider_account_unique', 'provider account is unique');
+select has_index('public', 'app_accounts', 'app_accounts_member_id_key', 'a member links to at most one account');
 select ok(
   to_regclass('public.members_grade_idx') is not null
   or to_regclass('public.members_grade_id_idx') is not null,
@@ -25,10 +25,10 @@ select is(
     select count(*)::integer
     from pg_class
     where oid in (
-      'public."user"'::regclass,
-      'public.account'::regclass,
-      'public.session'::regclass,
-      'public.verification'::regclass,
+      'app_auth."user"'::regclass,
+      'app_auth.account'::regclass,
+      'app_auth.session'::regclass,
+      'app_auth.verification'::regclass,
       'public.grades'::regclass,
       'public.members'::regclass,
       'public.event_messages'::regclass
@@ -43,10 +43,10 @@ select is(
     select count(*)::integer
     from pg_class
     where oid in (
-      'public."user"'::regclass,
-      'public.account'::regclass,
-      'public.session'::regclass,
-      'public.verification'::regclass,
+      'app_auth."user"'::regclass,
+      'app_auth.account'::regclass,
+      'app_auth.session'::regclass,
+      'app_auth.verification'::regclass,
       'public.grades'::regclass,
       'public.members'::regclass,
       'public.event_messages'::regclass

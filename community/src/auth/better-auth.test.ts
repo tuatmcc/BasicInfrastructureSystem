@@ -54,12 +54,10 @@ test("Better Auth signs members in with Discord as the only provider", async () 
     assert.ok(!("disableSignUp" in (discord ?? {})));
     // Better Auth appends this to its default identify+email scopes.
     assert.deepEqual(discord?.scope, ["guilds"]);
-    assert.deepEqual(
-        Object.keys(authContext.options.user?.additionalFields ?? {}).sort(),
-        ["memberId", "role"],
-    );
-    assert.equal(authContext.options.user?.additionalFields?.memberId?.input, false);
-    assert.equal(authContext.options.user?.additionalFields?.role?.input, false);
+    // Membership and role are domain facts held in public.app_accounts. Better
+    // Auth must not carry them, or its tables could not move to another
+    // database without taking domain columns along.
+    assert.ok(!("user" in authContext.options));
 });
 
 test("post-login routing only sends active members to their profile", () => {

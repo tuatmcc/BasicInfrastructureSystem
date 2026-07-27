@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { verify } from 'hono/jwt'
 import { and, eq, gt } from 'drizzle-orm'
-import { session, user } from '../../../share/drizzle/schema'
+import { appAccounts, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
   id: string
@@ -15,52 +15,74 @@ export type appUser = {
   role: 'admin' | 'user'
 }
 
-const userSelection = {
+// Who the caller is, according to the authentication store.
+const subjectSelection = {
   id: user.id,
   name: user.name,
-  memberId: user.memberId,
-  role: user.role,
 }
 
+// What the caller may do, according to the domain.
+const accountSelection = {
+  memberId: appAccounts.memberId,
+  role: appAccounts.role,
+}
+
+// This is the boundary between the authentication store and the domain, and the
+// only place that reads both. The two lookups stay separate rather than joining
+// across app_auth and public, so moving the authentication store to its own
+// database turns the first one into a remote call and leaves the second alone.
 const loadAppUser = async (
   c: Context<AppContext>,
   userId: string,
   sessionId?: string,
 ): Promise<appUser | null> => {
-  const [currentUser] = await c.get('db').transaction(async (db) => sessionId
-    ? db
-      .select(userSelection)
-      .from(user)
-      .innerJoin(session, eq(session.userId, user.id))
-      .where(and(
-        eq(user.id, userId),
-        eq(session.id, sessionId),
-        gt(session.expiresAt, new Date()),
-      ))
-      .limit(1)
-    : db
-      .select(userSelection)
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1));
+  const resolved = await c.get('db').transaction(async (db) => {
+    const [subject] = sessionId
+      ? await db
+        .select(subjectSelection)
+        .from(user)
+        .innerJoin(session, eq(session.userId, user.id))
+        .where(and(
+          eq(user.id, userId),
+          eq(session.id, sessionId),
+          gt(session.expiresAt, new Date()),
+        ))
+        .limit(1)
+      : await db
+        .select(subjectSelection)
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1);
 
-  if (!currentUser) {
+    if (!subject) return null;
+
+    const [account] = await db
+      .select(accountSelection)
+      .from(appAccounts)
+      .where(eq(appAccounts.userId, subject.id))
+      .limit(1);
+
+    if (!account) return null;
+
+    return {
+      id: subject.id,
+      name: subject.name,
+      memberId: account.memberId,
+      role: account.role === 'admin' ? 'admin' as const : 'user' as const,
+    };
+  });
+
+  if (!resolved) {
     return null;
   }
 
-  const role = currentUser.role === 'admin' ? 'admin' : 'user';
   c.get('db').setIdentity({
-    userId: currentUser.id,
-    memberId: currentUser.memberId,
-    role,
+    userId: resolved.id,
+    memberId: resolved.memberId,
+    role: resolved.role,
   });
 
-  return {
-    id: currentUser.id,
-    name: currentUser.name,
-    memberId: currentUser.memberId,
-    role,
-  };
+  return resolved;
 }
 
 export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
