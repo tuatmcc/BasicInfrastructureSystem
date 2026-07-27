@@ -7,6 +7,11 @@
 set statement_timeout = 0;
 set lock_timeout = '10s';
 
+-- The migration runner applies statements in autocommit, so the transaction is
+-- opened here explicitly. Without it `lock table` fails with 25P01 and the
+-- emptiness check stops protecting the replacement that follows it.
+begin;
+
 -- Freeze authentication and membership writes between the emptiness check and
 -- the table replacement. The lock timeout makes a busy deployment fail safely.
 lock table
@@ -883,3 +888,5 @@ comment on table public.member_directory_profiles is
   'Approved-member directory data safe for other active members.';
 comment on view app_api.member_directory_entries is
   'Allowlisted active-member directory; intentionally excludes all private member fields.';
+
+commit;

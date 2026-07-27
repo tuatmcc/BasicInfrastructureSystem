@@ -310,6 +310,9 @@ test('membership workflow requires the audited purge, retains events, and harden
       client.exec(workflowMigration),
       /membership workflow requires empty replaced tables/,
     )
+    // The migration opens its own transaction, so the refusal leaves it aborted
+    // until it is ended explicitly.
+    await client.exec('rollback')
 
     const purgeRunbook = renderConfirmedFixturePurge(
       await readFile(confirmedTestDataPurgeRunbookPath, 'utf8'),
