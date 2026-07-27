@@ -1,294 +1,279 @@
-import { z } from "@hono/zod-openapi"
-import { createRoute } from "@hono/zod-openapi";
-import { createSelectSchema, createInsertSchema } from "drizzle-zod"
-import { members } from "../../../../share/drizzle/schema"
-import { createUpdateSchema } from "drizzle-zod";
+import { createRoute, z } from '@hono/zod-openapi'
 
-export const MemberSchema = createSelectSchema(members).extend({
-    displayGrade: z.string().optional().openapi({ example: 'B1' })
-}).openapi("Member")
-
-export const CreateMemberSchema = createInsertSchema(members).omit({memberId:true ,createdAt:true,updatedAt:true}).openapi("CreateMember");
-
-
-export const UpdateMemberSchema = createUpdateSchema(members).partial().openapi("UpdateMemberRequest")
+export const MemberStatusSchema = z
+  .enum(['pending', 'active', 'rejected', 'withdrawn'])
+  .openapi('MemberStatus')
 
 const ErrorSchema = z.object({
-    error: z.string(),
-}).openapi("ErrorResponse")
+  error: z.string(),
+  code: z.string(),
+  currentVersion: z.number().int().positive().optional(),
+}).openapi('MemberErrorResponse')
 
+const ApplicationFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  grade: z.number().int().positive(),
+  emergencyContact: z.string().trim().min(1).max(500),
+  studentId: z.string().trim().min(1).max(64),
+  studentEmail: z.string().trim().email().max(320),
+  insurance: z.boolean().default(false),
+  someAllergy: z.boolean().default(false),
+  allergyDetails: z.string().max(2000).nullable().optional(),
+})
 
-// create
-// admin のみ
-export const createMemberRoute = createRoute({
-    method: 'post',
-    path: '/',
-    request:{
-        body:{
-            content:{
-                "application/json":{
-                    schema: CreateMemberSchema
-                }
-            }
-        }
-    },
-    responses: {
-        201: {
-            description: 'ユーザーの作成に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema,
-                },
-            },
-        },
-        400: {
-            description: 'リクエストが不正',
-        },
-    },
-});
+export const JoinMemberSchema = ApplicationFieldsSchema.extend({
+  // Required only when the same rejected row is resubmitted. The service
+  // returns 409 when the supplied version is stale or omitted.
+  expectedVersion: z.number().int().positive().optional(),
+}).strict().openapi('JoinMemberRequest')
 
-// join
-// ログイン済みユーザーが自分自身の部員情報を作成して紐付ける
+export const DirectoryProfileSchema = z.object({
+  displayName: z.string(),
+  skills: z.array(z.string()),
+  interests: z.array(z.string()),
+  currentActivities: z.string(),
+  bio: z.string(),
+  directoryVisible: z.boolean(),
+}).openapi('MemberDirectoryProfile')
+
+export const CommunityMembershipSchema = z.object({
+  provider: z.string(),
+  communityId: z.string(),
+  nickname: z.string().nullable(),
+  roles: z.array(z.string()),
+}).openapi('DirectoryCommunityMembership')
+
+export const DiscordEvidenceSchema = z.object({
+  username: z.string(),
+  providerDisplayName: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  communityId: z.string(),
+  nickname: z.string().nullable(),
+  roles: z.array(z.string()),
+  verifiedAt: z.string(),
+  lastCheckedAt: z.string(),
+}).openapi('DiscordMembershipEvidence')
+
+export const MemberSchema = z.object({
+  memberId: z.string().uuid(),
+  name: z.string(),
+  grade: z.number().int(),
+  displayGrade: z.string(),
+  emergencyContact: z.string(),
+  studentId: z.string(),
+  studentEmail: z.string(),
+  insurance: z.boolean(),
+  someAllergy: z.boolean(),
+  allergyDetails: z.string().nullable(),
+  memberStatus: MemberStatusSchema,
+  applicationVersion: z.number().int().positive(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+  reviewReason: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  directoryProfile: DirectoryProfileSchema.nullable(),
+  discord: DiscordEvidenceSchema.nullable(),
+}).openapi('Member')
+
+export const UpdateMemberSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200).optional(),
+  grade: z.number().int().positive().optional(),
+  emergencyContact: z.string().trim().min(1).max(500).optional(),
+  studentId: z.string().trim().min(1).max(64).optional(),
+  studentEmail: z.string().trim().email().max(320).optional(),
+  insurance: z.boolean().optional(),
+  someAllergy: z.boolean().optional(),
+  allergyDetails: z.string().max(2000).nullable().optional(),
+  displayName: z.string().trim().min(1).max(100).optional(),
+  skills: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  interests: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  currentActivities: z.string().max(2000).optional(),
+  bio: z.string().max(2000).optional(),
+}).strict().openapi('UpdateMemberRequest')
+
+export const AdminUpdateMemberSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200).optional(),
+  grade: z.number().int().positive().optional(),
+  emergencyContact: z.string().trim().min(1).max(500).optional(),
+  studentId: z.string().trim().min(1).max(64).optional(),
+  studentEmail: z.string().trim().email().max(320).optional(),
+  insurance: z.boolean().optional(),
+  someAllergy: z.boolean().optional(),
+  allergyDetails: z.string().max(2000).nullable().optional(),
+  displayName: z.string().trim().min(1).max(100).optional(),
+  skills: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  interests: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  currentActivities: z.string().max(2000).optional(),
+  bio: z.string().max(2000).optional(),
+  directoryVisible: z.boolean().optional(),
+  memberStatus: MemberStatusSchema.optional(),
+  reason: z.string().trim().min(1).max(2000).optional(),
+}).strict().openapi('AdminUpdateMemberRequest')
+
+export const DirectoryEntrySchema = z.object({
+  memberId: z.string().uuid(),
+  displayName: z.string(),
+  gradeCode: z.string(),
+  displayGrade: z.string(),
+  skills: z.array(z.string()),
+  interests: z.array(z.string()),
+  currentActivities: z.string(),
+  bio: z.string(),
+  communities: z.array(CommunityMembershipSchema),
+}).openapi('MemberDirectoryEntry')
+
+export const AdminMemberSchema = MemberSchema.extend({
+  userId: z.string(),
+  userEmail: z.string().email(),
+}).openapi('AdminMember')
+
+export const MemberStatusHistorySchema = z.object({
+  fromStatus: MemberStatusSchema.nullable(),
+  toStatus: MemberStatusSchema,
+  changedByUserId: z.string().nullable(),
+  reason: z.string().nullable(),
+  createdAt: z.string(),
+}).openapi('MemberStatusHistory')
+
+export const AdminMemberDetailSchema = AdminMemberSchema.extend({
+  statusHistory: z.array(MemberStatusHistorySchema),
+}).openapi('AdminMemberDetail')
+
+export const ApplicationDecisionSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+})
+
+export const RejectApplicationSchema = ApplicationDecisionSchema.extend({
+  reason: z.string().trim().min(1).max(2000),
+})
+
 export const joinMemberRoute = createRoute({
-    method: 'post',
-    path: '/join',
-    request:{
-        body:{
-            content:{
-                "application/json":{
-                    schema: CreateMemberSchema
-                }
-            }
-        }
-    },
-    responses: {
-        201: {
-            description: '入部に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema,
-                },
-            },
-        },
-        401: {
-            description: '認証エラー',
-            content: {
-                'application/json': {
-                    schema: ErrorSchema,
-                },
-            },
-        },
-        409: {
-            description: '既に入部済み',
-            content: {
-                'application/json': {
-                    schema: ErrorSchema,
-                },
-            },
-        },
-    },
-});
+  method: 'post',
+  path: '/join',
+  request: {
+    body: { content: { 'application/json': { schema: JoinMemberSchema } } },
+  },
+  responses: {
+    200: { description: 'Rejected application resubmitted', content: { 'application/json': { schema: MemberSchema } } },
+    201: { description: 'Pending application created', content: { 'application/json': { schema: MemberSchema } } },
+    401: { description: 'Unauthorized', content: { 'application/json': { schema: ErrorSchema } } },
+    409: { description: 'Application conflict or Discord verification required', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
 
-
-// read 
 export const getMemberRoute = createRoute({
-    method: 'get',
-    path: '/me',
-    responses: {
-        200: {
-            description: '自身のユーザー情報の取得に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema,
-                },
-            },
-        },
-        401: {
-            description: '認証エラー',
-        },
-    },
+  method: 'get',
+  path: '/me',
+  responses: {
+    200: { description: 'Current application/member', content: { 'application/json': { schema: MemberSchema } } },
+    404: { description: 'No application', content: { 'application/json': { schema: ErrorSchema } } },
+  },
 })
 
-// // admin のみ 
-// // id での取得
-// export const getMembersByIdRoute = createRoute({
-//     method: 'get',
-//     path: '/',
-//     request: {
-//         params: z.object({
-//             id: z.string().openapi({ example: 'user-123' }).array(),
-//         }),
-//     },
-//     responses: {
-//         200: {
-//             description: 'ユーザー情報の取得に成功',
-//             content: {
-//                 'application/json': {
-//                     schema: MemberSchema.array(),
-//                 },
-//             },
-//         },
-//         403: {
-//             description: '権限がありません',
-//         },
-//         404: {
-//             description: 'ユーザーが見つからない',
-//         },
-//     },
-// })
-
-// // 条件付き一括取得　admin のみ
-// export const getMembersByConditionRoute = createRoute({
-//     method: 'get',
-//     path: '/',
-//     request: {
-//         query: z.object({
-//             gradeup: z.string().optional().openapi({ example: '2019' }),
-//             gradedown: z.string().optional().openapi({ example: '2025' }),
-//         }),
-//     },
-//     responses: {
-//         200: {
-//             description: 'ユーザー一覧の取得に成功',
-//             content: {
-//                 'application/json': {
-//                     schema: MemberSchema.array(),
-//                 },
-//             },
-//         },
-//         403: {
-//             description: '権限がありません',
-//         },
-//     },
-// })
-
-// update
-// 自分自身の情報の更新
 export const updateMemberRoute = createRoute({
-    method: 'put',
-    path: '/me',
-    request: {
-        body: {
-            content: {
-                'application/json': {
-                    schema: UpdateMemberSchema,
-                },
-            },
-        },
-    },
-    responses: {
-        200: {
-            description: '自身のユーザー情報の更新に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema,
-                },
-            },
-        },
-        400: {
-            description: 'リクエストが不正',
-        },
-        401: {
-            description: '認証エラー',
-        },
-    },
+  method: 'put',
+  path: '/me',
+  request: {
+    body: { content: { 'application/json': { schema: UpdateMemberSchema } } },
+  },
+  responses: {
+    200: { description: 'Current application/member updated', content: { 'application/json': { schema: MemberSchema } } },
+    400: { description: 'Field is not editable in the current state', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'No application', content: { 'application/json': { schema: ErrorSchema } } },
+    409: { description: 'Version conflict', content: { 'application/json': { schema: ErrorSchema } } },
+  },
 })
 
-// admin のみ　id での更新
-export const updateMemberByIdRoute = createRoute({
-    method: 'put',
-    path:'/:id',
-    request: {
-        params: z.object({
-            id: z.string().openapi({ example: 'user-123' }),
-        }),
-        body: {
-            content: {
-                'application/json': {
-                    schema: UpdateMemberSchema,
-                },
-            },
-        },
-    },
-    responses: {
-        200: {
-            description: 'ユーザー情報の更新に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema,
-                },
-            },
-        },
-        403: {
-            description: '権限がありません',
-        },
-        400: {
-            description: 'リクエストが不正',
-        },
-        404: {
-            description: 'ユーザーが見つからない',
-        },
-    },
+export const getDirectoryRoute = createRoute({
+  method: 'get',
+  path: '/directory',
+  responses: {
+    200: { description: 'Allowlisted active-member directory', content: { 'application/json': { schema: z.array(DirectoryEntrySchema) } } },
+    403: { description: 'Only active members may read the directory', content: { 'application/json': { schema: ErrorSchema } } },
+  },
 })
 
-// delete (admin only)
-export const deleteMemberRoute = createRoute({
-    method: 'delete',
-    path: '/:id',
-    request: {
-        params: z.object({
-            id: z.string().openapi({ example: 'user-123' }),
-        }),
+export const listAdminMembersRoute = createRoute({
+  method: 'get',
+  path: '/',
+  request: {
+    query: z.object({
+      status: MemberStatusSchema.optional(),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+      cursor: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Private admin member ledger',
+      content: {
+        'application/json': {
+          schema: z.object({ items: z.array(AdminMemberSchema), nextCursor: z.string().nullable() }),
+        },
+      },
     },
-    responses: {
-        204: {
-            description: 'ユーザーの削除に成功',
-        },
-        403: {
-            description: '権限がありません',
-        },
-        404: {
-            description: 'ユーザーが見つからない',
-        },
-    },
+    400: { description: 'Invalid cursor', content: { 'application/json': { schema: ErrorSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
+  },
 })
 
+export const getAdminMemberRoute = createRoute({
+  method: 'get',
+  path: '/:id',
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: {
+    200: { description: 'Private admin member detail', content: { 'application/json': { schema: AdminMemberDetailSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
 
-// 特定のIDリストに基づくメンバー情報の取得（バッチ取得） admin のみ
-export const getMembersByIdsRoute = createRoute({
-    method: 'post',
-    path: '/by-ids',
-    request: {
-        body: {
-            content: {
-                'application/json': {
-                    schema: z.object({
-                        ids: z.array(z.string()).openapi({ 
-                            description: 'メンバーIDの配列', 
-                            example: ['uuid-1', 'uuid-2'] 
-                        })
-                    })
-                }
-            }
-        }
-    },
-    responses: {
-        200: {
-            description: '指定されたメンバー情報の取得に成功',
-            content: {
-                'application/json': {
-                    schema: MemberSchema.array(),
-                },
-            },
-        },
-        400: {
-            description: 'リクエストボディが不正',
-        },
-        401: {
-            description: '認証エラー',
-        },
-        403: {
-            description: '権限がありません',
-        },
-    },
+export const updateAdminMemberRoute = createRoute({
+  method: 'put',
+  path: '/:id',
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: { content: { 'application/json': { schema: AdminUpdateMemberSchema } } },
+  },
+  responses: {
+    200: { description: 'Admin member update', content: { 'application/json': { schema: AdminMemberSchema } } },
+    400: { description: 'Invalid state transition or fields', content: { 'application/json': { schema: ErrorSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: { description: 'Version conflict', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+export const approveMemberRoute = createRoute({
+  method: 'post',
+  path: '/:id/approve',
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: { content: { 'application/json': { schema: ApplicationDecisionSchema } } },
+  },
+  responses: {
+    200: { description: 'Application approved', content: { 'application/json': { schema: AdminMemberSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: { description: 'Version/status/Discord evidence conflict', content: { 'application/json': { schema: ErrorSchema } } },
+    502: { description: 'Discord verification service unavailable', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+export const rejectMemberRoute = createRoute({
+  method: 'post',
+  path: '/:id/reject',
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+    body: { content: { 'application/json': { schema: RejectApplicationSchema } } },
+  },
+  responses: {
+    200: { description: 'Application rejected', content: { 'application/json': { schema: AdminMemberSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: { description: 'Version/status conflict', content: { 'application/json': { schema: ErrorSchema } } },
+  },
 })

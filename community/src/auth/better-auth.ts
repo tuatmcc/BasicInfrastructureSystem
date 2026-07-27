@@ -6,35 +6,46 @@ import { Context } from "hono";
 import { createRoute, z } from "@hono/zod-openapi";
 import { sign } from "hono/jwt";
 import { setCookie } from "hono/cookie";
+import { eq } from "drizzle-orm";
+import { getAuthDatabase, type AppDatabase } from "../core/db";
 
-export const getAuth = (c: Context<AppContext>) => {
-    const db = c.get("db");
+export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
+    const db = database ?? getAuthDatabase(c);
     return betterAuth({
         database: drizzleAdapter(db, {
             provider: "pg",
             schema: schema
         }),
-        secret:  c.env.JWT_SECRET,
+        secret: c.env.BETTER_AUTH_SECRET,
         baseURL: c.env.COMMUNITY_URL || "http://localhost:8787",
         trustedOrigins: [
             c.env.FRONTEND_URL || "http://localhost:3000"
         ],
         user: {
             additionalFields: {
-                discordUserId: { type: "string", required: false },
-                displayName: { type: "string", required: false },
-                memberId: { type: "string", required: false },
-                role: { type: "string", defaultValue: "user" }
+                memberId: { type: "string", required: false, input: false },
+                role: { type: "string", defaultValue: "user", input: false }
             }
         },
-        socialProviders: {
-            github: {
-                clientId: c.env.GITHUB_CLIENT_ID,
-                clientSecret: c.env.GITHUB_CLIENT_SECRET,
+        account: {
+            encryptOAuthTokens: true,
+            accountLinking: {
+                enabled: true,
+                disableImplicitLinking: true,
+                allowDifferentEmails: true,
+                allowUnlinkingAll: false,
+                updateUserInfoOnLink: false,
             },
+        },
+        socialProviders: {
+            // Discord is the only identity provider. The same account both signs
+            // the member in and supplies the guild membership evidence the join
+            // flow verifies, so there is no second provider to link or reconcile.
             discord: {
                 clientId: c.env.DISCORD_CLIENT_ID,
                 clientSecret: c.env.DISCORD_CLIENT_SECRET,
+                // Appended to Better Auth's default identify+email scopes.
+                scope: ["guilds"],
             }
         },
         advanced: {
@@ -42,6 +53,11 @@ export const getAuth = (c: Context<AppContext>) => {
         }
     });
 };
+
+export const getPostLoginRedirectPath = (
+    role: 'admin' | 'user',
+    memberStatus: string | null | undefined,
+) => role === 'admin' ? '/' : memberStatus === 'active' ? '/me' : '/join';
 
 // JWT Endpoint Route definition
 export const getJwtRoute = createRoute({
@@ -80,13 +96,46 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
     }
 
     try {
+        const authDb = getAuthDatabase(c);
+        const [currentUser] = await authDb
+            .select({
+                role: schema.user.role,
+                memberId: schema.user.memberId,
+            })
+            .from(schema.user)
+            .where(eq(schema.user.id, session.user.id))
+            .limit(1);
+
+        if (!currentUser) {
+            console.error("[JWT Endpoint] Authenticated user was not found in the application database.");
+            return c.redirect(`${frontendUrl}/login?error=user_not_found`);
+        }
+
+        const role = currentUser.role === "admin" ? "admin" : "user";
+        const db = c.get("db");
+        db.setIdentity({
+            userId: session.user.id,
+            memberId: currentUser.memberId,
+            role,
+        });
+
+        const memberId = currentUser.memberId;
+        const [member] = memberId
+            ? await db.transaction((tx) => tx
+                .select({ memberStatus: schema.members.memberStatus })
+                .from(schema.members)
+                .where(eq(schema.members.memberId, memberId))
+                .limit(1))
+            : [];
         const payload = {
             id: session.user.id,
-            discordid: (session.user as any).discordUserId || null,
+            sid: session.session.id,
             name: session.user.name,
-            displayName: (session.user as any).displayName || session.user.name,
-            role: ((session.user as any).role as 'admin' | 'user') || 'user',
-            exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7, // 7 days
+            role,
+            exp: Math.min(
+                Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+                Math.floor(new Date(session.session.expiresAt).getTime() / 1000),
+            ),
         };
 
         const token = await sign(payload, c.env.JWT_SECRET, 'HS256');
@@ -101,9 +150,7 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             domain: c.env.COOKIE_DOMAIN || undefined,
         });
 
-        const redirectPath = payload.role === 'admin'
-            ? '/'
-            : (session.user as any).memberId ? '/me' : '/join';
+        const redirectPath = getPostLoginRedirectPath(role, member?.memberStatus);
         console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id} with role ${payload.role}`);
         return c.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {

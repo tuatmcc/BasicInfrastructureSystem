@@ -1,4 +1,5 @@
 import type { DiscordMessage, DiscordReactionUser } from "../../lib/community/type";
+import type { MemberStatus } from "../../../../share/drizzle/schema";
 
 export type EventMessageRecord = {
     id: string;
@@ -11,19 +12,27 @@ export type EventMessageRecord = {
 };
 
 export type LinkedReactionUser = {
-    discordUserId: string | null;
+    discordUserId: string;
     userId: string;
     userName: string;
-    displayName: string | null;
     email: string;
     memberId: string | null;
     memberName: string | null;
+    memberStatus: MemberStatus | null;
+    displayName: string | null;
     displayGrade: string | null;
     studentId: string | null;
     studentEmail: string | null;
     emergencyContact: string | null;
     insurance: boolean | null;
     someAllergy: boolean | null;
+    allergyDetails: string | null;
+    skills: string[] | null;
+    interests: string[] | null;
+    currentActivities: string | null;
+    bio: string | null;
+    discordNickname: string | null;
+    discordRoles: string[] | null;
 };
 
 export type ReactionUsersByEmoji = {
@@ -42,12 +51,20 @@ export type ReactionMember = {
     email: string | null;
     memberId: string | null;
     memberName: string | null;
+    memberStatus: MemberStatus | null;
     displayGrade: string | null;
     studentId: string | null;
     studentEmail: string | null;
     emergencyContact: string | null;
     insurance: boolean | null;
     someAllergy: boolean | null;
+    allergyDetails: string | null;
+    skills: string[];
+    interests: string[];
+    currentActivities: string | null;
+    bio: string | null;
+    discordNickname: string | null;
+    discordRoles: string[];
     reactions: string[];
 };
 
@@ -64,9 +81,7 @@ export const buildMessageReactionSummary = (
     linkedUsers: LinkedReactionUser[],
 ) => {
     const linkedUserMap = new Map(
-        linkedUsers
-            .filter((user) => user.discordUserId)
-            .map((user) => [user.discordUserId, user])
+        linkedUsers.map((user) => [user.discordUserId, user])
     );
     const memberMap = new Map<string, ReactionMember>();
 
@@ -83,12 +98,20 @@ export const buildMessageReactionSummary = (
                 email: linkedUser?.email ?? null,
                 memberId: linkedUser?.memberId ?? null,
                 memberName: linkedUser?.memberName ?? null,
+                memberStatus: linkedUser?.memberStatus ?? null,
                 displayGrade: linkedUser?.displayGrade ?? null,
                 studentId: linkedUser?.studentId ?? null,
                 studentEmail: linkedUser?.studentEmail ?? null,
                 emergencyContact: linkedUser?.emergencyContact ?? null,
                 insurance: linkedUser?.insurance ?? null,
                 someAllergy: linkedUser?.someAllergy ?? null,
+                allergyDetails: linkedUser?.allergyDetails ?? null,
+                skills: linkedUser?.skills ?? [],
+                interests: linkedUser?.interests ?? [],
+                currentActivities: linkedUser?.currentActivities ?? null,
+                bio: linkedUser?.bio ?? null,
+                discordNickname: linkedUser?.discordNickname ?? null,
+                discordRoles: linkedUser?.discordRoles ?? [],
                 reactions: [reaction.emoji],
             };
 

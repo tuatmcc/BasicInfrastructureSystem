@@ -14,7 +14,11 @@ select has_table('public', 'members', 'member table exists');
 select has_table('public', 'event_messages', 'event message table exists');
 select has_index('public', 'account', 'account_provider_account_unique', 'provider account is unique');
 select has_index('public', 'user', 'user_member_id_unique', 'a member links to at most one app user');
-select has_index('public', 'members', 'members_grade_idx', 'member grade foreign key is indexed');
+select ok(
+  to_regclass('public.members_grade_idx') is not null
+  or to_regclass('public.members_grade_id_idx') is not null,
+  'member grade foreign key is indexed in the active schema version'
+);
 
 select is(
   (
@@ -57,7 +61,7 @@ select is(
     select count(*)::integer
     from information_schema.role_table_grants
     where table_schema = 'public'
-      and grantee in ('anon', 'authenticated')
+      and grantee in ('anon', 'authenticated', 'service_role')
   ),
   0,
   'Data API roles have no public table privileges'

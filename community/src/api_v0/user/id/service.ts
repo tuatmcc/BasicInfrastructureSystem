@@ -14,7 +14,11 @@ export const getUserByIdService: RouteHandler<typeof getUserByIdRoute, AppContex
         return c.json({ message: "Forbidden" }, 403);
     }
     const db = c.get("db");
-    const result = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+    const result = await db.transaction((tx) => tx
+        .select()
+        .from(user)
+        .where(eq(user.id, userId))
+        .limit(1));
 
     if (result.length === 0) {
         return c.json({ message: "User not found" }, 404);
@@ -35,13 +39,13 @@ export const updateUserByIdService: RouteHandler<typeof updateUserByIdRoute, App
     const db = c.get("db");
     const body = c.req.valid("json");
 
-    const updated = await db.update(user)
+    const updated = await db.transaction((tx) => tx.update(user)
         .set({
             ...body,
             updatedAt: new Date()
         })
         .where(eq(user.id, userId))
-        .returning();
+        .returning());
 
     if (updated.length === 0) {
         return c.json({ message: "User not found" }, 404);
@@ -60,7 +64,7 @@ export const deleteUserByIdService: RouteHandler<typeof deleteUserByIdRoute, App
         return c.json({ message: "Forbidden" }, 403);
     }
     const db = c.get("db");
-    await db.delete(user).where(eq(user.id, userId));
+    await db.transaction((tx) => tx.delete(user).where(eq(user.id, userId)));
 
     return c.body(null, 204);
 };

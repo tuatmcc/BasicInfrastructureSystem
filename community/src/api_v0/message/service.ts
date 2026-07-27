@@ -7,8 +7,16 @@ import {
     getMessageRoute,
     listMessagesRoute
 } from "./schema"
-import { eventMessages, grades, members, user as authUsers } from "../../../../share/drizzle/schema"
-import { desc, eq, inArray } from "drizzle-orm"
+import {
+    communityIdentities,
+    communityMemberships,
+    eventMessages,
+    grades,
+    memberDirectoryProfiles,
+    members,
+    user as authUsers,
+} from "../../../../share/drizzle/schema"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import {
     buildMessageReactionSummary,
     collectDiscordUserIds,
@@ -39,7 +47,7 @@ export const createMessageService: RouteHandler<typeof createMessageRoute, AppCo
             mentionRoleIds: body.mentionRoleIds,
         });
 
-        const [eventMessage] = await db
+        const [eventMessage] = await db.transaction((tx) => tx
             .insert(eventMessages)
             .values({
                 channelId: body.channelId,
@@ -47,7 +55,7 @@ export const createMessageService: RouteHandler<typeof createMessageRoute, AppCo
                 content: body.content,
                 createdBy: appUser.id,
             })
-            .returning();
+            .returning());
 
         return c.json(eventMessage, 201);
     } catch (error) {
@@ -70,10 +78,10 @@ export const listMessagesService: RouteHandler<typeof listMessagesRoute, AppCont
         return c.json({ error: "Forbidden" }, 403);
     }
 
-    const messages = await c.get("db")
+    const messages = await c.get("db").transaction((tx) => tx
         .select()
         .from(eventMessages)
-        .orderBy(desc(eventMessages.createdAt));
+        .orderBy(desc(eventMessages.createdAt)));
 
     return c.json(messages, 200);
 };
@@ -85,11 +93,11 @@ export const getMessageService: RouteHandler<typeof getMessageRoute, AppContext>
         return c.json({ error: "Forbidden" }, 403);
     }
 
-    const [eventMessage] = await c.get("db")
+    const [eventMessage] = await c.get("db").transaction((tx) => tx
         .select()
         .from(eventMessages)
         .where(eq(eventMessages.id, c.req.param("id")))
-        .limit(1);
+        .limit(1));
 
     if (!eventMessage) {
         return c.json({ error: "Event message not found" }, 404);
@@ -107,11 +115,11 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
         return c.json({ error: "Forbidden" }, 403);
     }
 
-    const [eventMessage] = await db
+    const [eventMessage] = await db.transaction((tx) => tx
         .select()
         .from(eventMessages)
         .where(eq(eventMessages.id, c.req.param("id")))
-        .limit(1);
+        .limit(1));
 
     if (!eventMessage) {
         return c.json({ error: "Event message not found" }, 404);
@@ -134,26 +142,43 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
         const discordUserIds = collectDiscordUserIds(reactionUsersByEmoji);
 
         const linkedUsers: LinkedReactionUser[] = discordUserIds.length > 0
-            ? await db
+            ? await db.transaction((tx) => tx
                 .select({
-                    discordUserId: authUsers.discordUserId,
+                    discordUserId: communityIdentities.providerAccountId,
                     userId: authUsers.id,
                     userName: authUsers.name,
-                    displayName: authUsers.displayName,
                     email: authUsers.email,
                     memberId: authUsers.memberId,
                     memberName: members.name,
+                    memberStatus: members.memberStatus,
+                    displayName: memberDirectoryProfiles.displayName,
                     displayGrade: grades.displayGrade,
                     studentId: members.studentId,
                     studentEmail: members.studentEmail,
                     emergencyContact: members.emergencyContact,
                     insurance: members.insurance,
                     someAllergy: members.someAllergy,
+                    allergyDetails: members.allergyDetails,
+                    skills: memberDirectoryProfiles.skills,
+                    interests: memberDirectoryProfiles.interests,
+                    currentActivities: memberDirectoryProfiles.currentActivities,
+                    bio: memberDirectoryProfiles.bio,
+                    discordNickname: communityMemberships.nickname,
+                    discordRoles: communityMemberships.roleNames,
                 })
-                .from(authUsers)
+                .from(communityIdentities)
+                .innerJoin(authUsers, eq(communityIdentities.userId, authUsers.id))
                 .leftJoin(members, eq(authUsers.memberId, members.memberId))
                 .leftJoin(grades, eq(members.grade, grades.id))
-                .where(inArray(authUsers.discordUserId, discordUserIds))
+                .leftJoin(memberDirectoryProfiles, eq(members.memberId, memberDirectoryProfiles.memberId))
+                .leftJoin(communityMemberships, and(
+                    eq(communityMemberships.identityId, communityIdentities.identityId),
+                    eq(communityMemberships.communityId, c.env.DISCORD_GUILD_ID),
+                ))
+                .where(and(
+                    eq(communityIdentities.provider, "discord"),
+                    inArray(communityIdentities.providerAccountId, discordUserIds),
+                )))
             : [];
 
         const summary = buildMessageReactionSummary(
@@ -163,6 +188,7 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
             linkedUsers,
         );
 
+        c.header("Cache-Control", "private, no-store");
         return c.json({
             eventMessage: summary.eventMessage,
             reactions: summary.reactions,

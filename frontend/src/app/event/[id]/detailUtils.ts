@@ -28,12 +28,20 @@ export type ReactionSummaryMember = {
   email: string | null;
   memberId: string | null;
   memberName: string | null;
+  memberStatus: 'pending' | 'active' | 'rejected' | 'withdrawn' | null;
   displayGrade: string | null;
   studentId: string | null;
   studentEmail: string | null;
   emergencyContact: string | null;
   insurance: boolean | null;
   someAllergy: boolean | null;
+  allergyDetails: string | null;
+  skills: string[];
+  interests: string[];
+  currentActivities: string | null;
+  bio: string | null;
+  discordNickname: string | null;
+  discordRoles: string[];
   reactions: string[];
 };
 
@@ -61,16 +69,26 @@ export const buildEventDetailViewModel = (summary: EventReactionSummary) => ({
   })),
   membersWithReactions: summary.members.map<ReactionMemberRow>((member) => ({
     name: getDisplayName(member),
+    registeredName: member.memberName,
+    displayName: member.displayName,
+    memberStatus: member.memberStatus,
     displayGrade: member.displayGrade,
     studentId: member.studentId,
     studentEmail: member.studentEmail,
     emergencyContact: member.emergencyContact,
     insurance: member.insurance,
     someAllergy: member.someAllergy,
+    allergyDetails: member.allergyDetails,
+    skills: member.skills,
+    interests: member.interests,
+    currentActivities: member.currentActivities,
+    bio: member.bio,
     memberId: member.memberId,
     discordUserId: member.discordUserId,
     discordUsername: member.discordUsername,
     discordGlobalName: member.discordGlobalName,
+    discordNickname: member.discordNickname,
+    discordRoles: member.discordRoles,
     userId: member.userId,
     email: member.email,
     reactions: member.reactions,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  DiscordGuildMembership,
   DiscordMessage,
   DiscordReactionUser,
   Role,
@@ -14,6 +15,7 @@ export interface CommunityProvider {
 
 // role
   listUserRoles(userId: string): Promise<Role[]>;
+  getGuildMembership(userId: string): Promise<DiscordGuildMembership>;
 
 // message
   sendMessage(input: SendMessageInput): Promise<SendMessageResult>;

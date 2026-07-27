@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Admin check and default landing split
-  if (token && (pathname.startsWith('/event') || pathname === '/')) {
+  if (token && (pathname.startsWith('/event') || pathname.startsWith('/admin') || pathname === '/')) {
     try {
         const jwtSecret = process.env.JWT_SECRET;
         if (!jwtSecret) {

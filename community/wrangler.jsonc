@@ -54,7 +54,7 @@
 	  {
 	    "binding": "HYPERDRIVE",
 	    "id": "9fdd8328502e4698ae4433453a49acd3",
-	    "localConnectionString": "postgresql://postgres:password@localhost:5432/postgres"
+	    "localConnectionString": "postgresql://app_runtime_login:password@localhost:5432/postgres"
 	  }
 	]
 }

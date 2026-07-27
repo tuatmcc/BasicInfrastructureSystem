@@ -36,7 +36,7 @@ const createContext = (overrides: {
     const community = overrides.community ?? {
         sendMessage: async () => ({ messageId: '323456789012345678' }),
     };
-    const db = overrides.db ?? {
+    const transactionDatabase = overrides.db ?? {
         insert: () => ({
             values: (values: unknown) => {
                 valuesCalls.push(values);
@@ -51,6 +51,17 @@ const createContext = (overrides: {
                 };
             },
         }),
+    };
+    let openTransactions = 0;
+    const db = {
+        transaction: async (operation: (tx: unknown) => Promise<unknown>) => {
+            openTransactions += 1;
+            try {
+                return await operation(transactionDatabase);
+            } finally {
+                openTransactions -= 1;
+            }
+        },
     };
 
     return {
@@ -72,19 +83,24 @@ const createContext = (overrides: {
         } as any,
         jsonCalls,
         valuesCalls,
+        isTransactionOpen: () => openTransactions > 0,
     };
 };
 
 test('createMessageService sends an event notification to Discord and saves the event message', async () => {
     const sendMessageCalls: unknown[] = [];
-    const { c, valuesCalls } = createContext({
+    let isTransactionOpen = () => false;
+    const testContext = createContext({
         community: {
             sendMessage: async (input: unknown) => {
+                assert.equal(isTransactionOpen(), false);
                 sendMessageCalls.push(input);
                 return { messageId: '323456789012345678' };
             },
         },
     });
+    const { c, valuesCalls } = testContext;
+    isTransactionOpen = testContext.isTransactionOpen;
 
     const response = await (createMessageService as any)(c);
 

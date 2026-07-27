@@ -76,17 +76,33 @@ export async function listMessageReactionUsersAPI(
   messageId: string,
   emoji: string
 ): Promise<DiscordReactionUser[]> {
-  const users = await provider.request<any[]>(
-    'GET',
-    `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}?limit=100`
-  );
+  const users: DiscordReactionUser[] = [];
+  let after: string | undefined;
 
-  return users.map((user) =>
-    DiscordReactionUserSchema.parse({
-      id: user.id,
-      username: user.username,
-      globalName: user.global_name ?? null,
-      bot: user.bot ?? false,
-    })
-  );
+  while (true) {
+    const query = new URLSearchParams({ limit: '100' });
+    if (after) query.set('after', after);
+
+    const page = await provider.request<any[]>(
+      'GET',
+      `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}?${query.toString()}`
+    );
+
+    const parsedPage = page.map((user) =>
+      DiscordReactionUserSchema.parse({
+        id: user.id,
+        username: user.username,
+        globalName: user.global_name ?? null,
+        bot: user.bot ?? false,
+      })
+    );
+    users.push(...parsedPage.filter((user) => !user.bot));
+
+    if (page.length < 100) break;
+    const nextAfter = parsedPage.at(-1)?.id;
+    if (!nextAfter || nextAfter === after) break;
+    after = nextAfter;
+  }
+
+  return users;
 }

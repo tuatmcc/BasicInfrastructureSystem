@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -17,6 +17,7 @@ import {
   matchesMemberTableFilter,
   ReactionMemberRow,
 } from './memberTableUtils';
+import ReactionMemberProfile from './ReactionMemberProfile';
 
 export type { ReactionMemberRow } from './memberTableUtils';
 
@@ -47,6 +48,16 @@ export default function MemberTable({ eventTitle, data }: MemberTableProps) {
   const [selectedOperator, setSelectedOperator] = useState<'contains' | 'equals' | 'is'>('contains');
   const [filterValue, setFilterValue] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [collapsedProfileIds, setCollapsedProfileIds] = useState<Set<string>>(() => new Set());
+
+  const toggleProfile = useCallback((discordUserId: string) => {
+    setCollapsedProfileIds(current => {
+      const next = new Set(current);
+      if (next.has(discordUserId)) next.delete(discordUserId);
+      else next.add(discordUserId);
+      return next;
+    });
+  }, []);
 
   const filterableColumns = useMemo(() => [
     { id: 'name', label: '名前', operators: [{ value: 'contains', label: 'を含む' }, { value: 'equals', label: 'と一致する' }], type: 'text' },
@@ -110,7 +121,18 @@ export default function MemberTable({ eventTitle, data }: MemberTableProps) {
     {
       accessorKey: 'name',
       header: '名前',
-      cell: info => <span className="font-semibold text-slate-950 dark:text-white">{info.getValue() as string}</span>,
+      cell: info => (
+        <button
+          type="button"
+          onClick={() => toggleProfile(info.row.original.discordUserId)}
+          className="text-left font-semibold text-slate-950 hover:text-blue-600 dark:text-white dark:hover:text-blue-400"
+        >
+          {info.getValue() as string}
+          <span className="ml-2 text-[10px] font-normal text-slate-400">
+            {collapsedProfileIds.has(info.row.original.discordUserId) ? '詳細を表示' : '詳細を閉じる'}
+          </span>
+        </button>
+      ),
       filterFn: customFilterFn,
     },
     {
@@ -175,7 +197,7 @@ export default function MemberTable({ eventTitle, data }: MemberTableProps) {
         );
       },
     },
-  ], []);
+  ], [collapsedProfileIds, toggleProfile]);
 
   const table = useReactTable({
     data,
@@ -222,6 +244,20 @@ export default function MemberTable({ eventTitle, data }: MemberTableProps) {
           className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-md text-xs font-semibold transition-colors"
         >
           {isExporting ? 'Exporting...' : 'Export CSV'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCollapsedProfileIds(new Set())}
+          className="px-3 py-2 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          全プロフィールを表示
+        </button>
+        <button
+          type="button"
+          onClick={() => setCollapsedProfileIds(new Set(data.map(member => member.discordUserId)))}
+          className="px-3 py-2 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          すべて折りたたむ
         </button>
       </div>
 
@@ -346,13 +382,22 @@ export default function MemberTable({ eventTitle, data }: MemberTableProps) {
           </thead>
           <tbody>
             {table.getRowModel().rows.length > 0 ? table.getRowModel().rows.map(row => (
-              <tr key={row.id} className="border-b border-slate-100 dark:border-zinc-800/60 last:border-0 hover:bg-slate-50 dark:hover:bg-zinc-800/30">
-                {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="p-3 text-slate-700 dark:text-zinc-300">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
+              <Fragment key={row.id}>
+                <tr className="border-b border-slate-100 dark:border-zinc-800/60 hover:bg-slate-50 dark:hover:bg-zinc-800/30">
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id} className="p-3 text-slate-700 dark:text-zinc-300">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+                {!collapsedProfileIds.has(row.original.discordUserId) && (
+                  <tr className="border-b border-slate-200 dark:border-zinc-800">
+                    <td colSpan={columns.length} className="p-3">
+                      <ReactionMemberProfile member={row.original} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             )) : (
               <tr>
                 <td colSpan={columns.length} className="p-8 text-center text-slate-400 dark:text-zinc-500">

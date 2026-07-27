@@ -14,32 +14,52 @@ import {
 const rows: ReactionMemberRow[] = [
   {
     name: '山田 太郎',
+    registeredName: '山田 太郎',
+    displayName: '太郎',
+    memberStatus: 'active',
     displayGrade: 'B2',
     studentId: 'S001',
     studentEmail: 'taro@example.edu',
     emergencyContact: '090-0000-0000',
     insurance: true,
     someAllergy: false,
+    allergyDetails: null,
+    skills: ['TypeScript'],
+    interests: ['Robotics'],
+    currentActivities: 'Robot controller',
+    bio: 'Embedded developer',
     memberId: 'member-1',
     discordUserId: '123456789012345678',
     discordUsername: 'taro',
     discordGlobalName: 'Taro Yamada',
+    discordNickname: 'たろう',
+    discordRoles: ['Member', 'Developer'],
     userId: 'user-1',
     email: 'account@example.com',
     reactions: ['✅', '🍱'],
   },
   {
     name: '佐藤 "花子"',
+    registeredName: '佐藤 "花子"',
+    displayName: '花子',
+    memberStatus: 'active',
     displayGrade: 'M1',
     studentId: 'S002',
     studentEmail: 'hanako@example.edu',
     emergencyContact: '080-0000-0000',
     insurance: false,
     someAllergy: true,
+    allergyDetails: 'Peanuts',
+    skills: ['Design'],
+    interests: ['UI'],
+    currentActivities: 'Website redesign',
+    bio: 'Designer',
     memberId: 'member-2',
     discordUserId: '223456789012345678',
     discordUsername: 'hanako',
     discordGlobalName: null,
+    discordNickname: null,
+    discordRoles: ['Member'],
     userId: 'user-2',
     email: 'hanako-account@example.com',
     reactions: ['❌'],
@@ -59,9 +79,29 @@ test('buildReactionMembersCsv exports visible reaction members with personal fie
   const csv = buildReactionMembersCsv(rows);
 
   assert.equal(csv.charCodeAt(0), 0xfeff);
-  assert.match(csv, /"名前","学年","学籍番号","学生メール","緊急連絡先","保険加入","アレルギー"/);
-  assert.match(csv, /"山田 太郎","B2","S001","taro@example.edu","090-0000-0000","加入","なし","Taro Yamada","123456789012345678","✅ 🍱","member-1","user-1"/);
-  assert.match(csv, /"佐藤 ""花子""","M1","S002","hanako@example.edu","080-0000-0000","未加入","あり","hanako","223456789012345678","❌","member-2","user-2"/);
+  assert.match(csv, /"名前","公開表示名","部員状態","学年","学籍番号","学生メール"/);
+  assert.match(csv, /"山田 太郎","太郎","active","B2","S001"/);
+  assert.match(csv, /"TypeScript","Robotics","Robot controller","Embedded developer","たろう","Member Developer"/);
+  assert.match(csv, /"佐藤 ""花子""","花子","active","M1","S002"/);
+  assert.match(csv, /"Peanuts","Design","UI","Website redesign","Designer"/);
+});
+
+test('buildReactionMembersCsv neutralizes spreadsheet formulas in user-controlled fields', () => {
+  const dangerousRow: ReactionMemberRow = {
+    ...rows[0],
+    name: '=HYPERLINK("https://example.invalid","click")',
+    skills: ['  +SUM(1,1)'],
+    bio: '\t@malicious',
+    discordNickname: '-2+3',
+  };
+
+  const csv = buildReactionMembersCsv([dangerousRow]);
+
+  assert.match(csv, /"'=HYPERLINK\(""https:\/\/example\.invalid"",""click""\)"/);
+  assert.match(csv, /"'  \+SUM\(1,1\)"/);
+  assert.match(csv, /"'\t@malicious"/);
+  assert.match(csv, /"'-2\+3"/);
+  assert.doesNotMatch(csv, /(?:^|,)"\s*[=+\-@]/m);
 });
 
 test('TanStack sorting orders reaction member rows by configured table columns', () => {

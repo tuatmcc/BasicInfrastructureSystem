@@ -1,14 +1,20 @@
 # Database
-DATABASE_URL=postgresql://user:password@host:port/dbname
+DATABASE_URL=postgresql://app_runtime_login:password@host:port/dbname
 
 # Better Auth Configuration
 BETTER_AUTH_SECRET=your_secure_random_32_char_string
+JWT_SECRET=use_a_different_secure_random_32_char_string
 BETTER_AUTH_URL=http://localhost:8787
 COMMUNITY_URL=http://localhost:8787
 FRONTEND_URL=http://localhost:3000
 
-# Social Providers
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
+# Social Provider (Discord is the only login provider)
 DISCORD_CLIENT_ID=your_discord_client_id
 DISCORD_CLIENT_SECRET=your_discord_client_secret
+
+# Discord guild verification
+DISCORD_TOKEN=your_discord_bot_token
+DISCORD_GUILD_ID=your_guild_id
+
+# Optional database-backed local identity
+DEV_USER_ID=your_local_user_id

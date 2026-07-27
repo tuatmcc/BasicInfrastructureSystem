@@ -1,27 +1,26 @@
-import { authUser, appUser } from './auth'
+import { appUser } from './auth'
 
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { RlsDatabase } from './db'
+
+type HyperdriveBinding = { connectionString: string }
 
 export type CloudflareBindings = {
-  DATABASE_URL: string
-  SUPABASE_URL: string // 例: https://xxxx.supabase.co
+  DATABASE_URL?: string
   JWT_SECRET: string
-  COMMUNITY_URL: string
   FRONTEND_URL: string
-  GITHUB_CLIENT_ID: string
-  GITHUB_CLIENT_SECRET: string
-  DISCORD_CLIENT_ID: string
-  DISCORD_CLIENT_SECRET: string
+  DISCORD_TOKEN: string
+  DISCORD_GUILD_ID: string
+  MEMBERSHIP_EVIDENCE_MAX_AGE_SECONDS?: string
 
   NODE_ENV: 'development' | 'production' | null
   DEV_USER_ID?: string
-  HYPERDRIVE?: any
+  HYPERDRIVE?: HyperdriveBinding
 }
 
 export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
-    db: NodePgDatabase<any>
+    db: RlsDatabase
     appUser: appUser
   }
 }

@@ -8,16 +8,27 @@ export const createUserSchema = createInsertSchema(user)
 
 export const getUserSchema = createSelectSchema(user).openapi("User")
 
-export const UpdateUserSchema = createInsertSchema(user)
-    .omit({ id: true, createdAt: true, updatedAt: true })
-    .partial()
-    .openapi("UpdateUserRequest")
+export const CurrentUserSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+    emailVerified: z.boolean(),
+    image: z.string().nullable(),
+    memberId: z.string().uuid().nullable(),
+    role: z.enum(["user", "admin"]),
+}).openapi("CurrentUser")
+
+// Better Auth owns identity, account linkage, member linkage, and application
+// roles. This legacy admin endpoint may only edit the same presentation fields
+// as the self-service endpoint; role/memberId changes remain explicit DB ops.
+export const UpdateUserSchema = z.object({
+    name: z.string().trim().min(1).max(200).optional(),
+    image: z.string().nullable().optional(),
+}).strict().openapi("UpdateUserRequest")
 
 export const UpdateUserMeSchema = z.object({
     name: z.string().optional(),
-    displayName: z.string().nullable().optional(),
     image: z.string().nullable().optional(),
-    discordUserId: z.string().nullable().optional(),
 }).openapi("UpdateUserMeRequest")
 
 const errorMessageSchema = z.object({ message: z.string() });

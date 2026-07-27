@@ -21,6 +21,21 @@ const createProvider = (response: unknown) => {
     };
 };
 
+const createPagedProvider = (responses: unknown[]) => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = [];
+    let index = 0;
+
+    return {
+        provider: {
+            request: async (method: string, path: string, body?: unknown) => {
+                calls.push({ method, path, body });
+                return responses[index++];
+            },
+        } as any,
+        calls,
+    };
+};
+
 test('sendMessageAPI posts an event notification to the Discord channel with role mentions', async () => {
     const { provider, calls } = createProvider({ id: '323456789012345678' });
 
@@ -107,4 +122,43 @@ test('listMessageReactionUsersAPI fetches and parses users who reacted to a mess
         globalName: 'Taro',
         bot: false,
     }]);
+});
+
+test('listMessageReactionUsersAPI follows Discord pagination and excludes bots', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+        id: String(600000000000000000n + BigInt(index)),
+        username: `user-${index}`,
+        global_name: null,
+        bot: false,
+    }));
+    const secondPage = [
+        {
+            id: '700000000000000001',
+            username: 'last-user',
+            global_name: 'Last User',
+            bot: false,
+        },
+        {
+            id: '700000000000000002',
+            username: 'ignored-bot',
+            global_name: null,
+            bot: true,
+        },
+    ];
+    const { provider, calls } = createPagedProvider([firstPage, secondPage]);
+
+    const users = await listMessageReactionUsersAPI(
+        provider,
+        '123456789012345678',
+        '323456789012345678',
+        '✅',
+    );
+
+    assert.equal(users.length, 101);
+    assert.equal(calls.length, 2);
+    assert.equal(
+        calls[1].path,
+        '/channels/123456789012345678/messages/323456789012345678/reactions/%E2%9C%85?limit=100&after=600000000000000099',
+    );
+    assert.equal(users.at(-1)?.username, 'last-user');
 });
