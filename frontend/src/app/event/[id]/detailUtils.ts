@@ -13,9 +13,19 @@ export type EventReactionSummary = {
   reactions: Array<{
     emoji: string;
     count: number;
-    users: Array<ReactionSummaryMember>;
+    users: Array<ReactionParticipant>;
   }>;
   members: Array<ReactionSummaryMember>;
+};
+
+// A reaction badge only shows names, so the API sends just these. The private
+// member fields arrive once per member in `members`.
+export type ReactionParticipant = {
+  discordUserId: string;
+  discordUsername: string;
+  discordGlobalName: string | null;
+  memberName: string | null;
+  displayName: string | null;
 };
 
 export type ReactionSummaryMember = {

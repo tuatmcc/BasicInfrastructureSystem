@@ -41,6 +41,17 @@ export type ReactionUsersByEmoji = {
     users: CommunityReactionUser[];
 };
 
+// What a reaction badge renders. The full record — including the private
+// member fields — is returned once per member in `members`, so it is not
+// repeated here for every emoji the same member reacted with.
+export type ReactionParticipant = {
+    discordUserId: string;
+    discordUsername: string;
+    discordGlobalName: string | null;
+    memberName: string | null;
+    displayName: string | null;
+};
+
 export type ReactionMember = {
     discordUserId: string;
     discordUsername: string;
@@ -125,10 +136,14 @@ export const buildMessageReactionSummary = (
                 });
             }
 
-            return {
-                ...reactionMember,
-                reactions: [...reactionMember.reactions],
+            const participant: ReactionParticipant = {
+                discordUserId: reactionMember.discordUserId,
+                discordUsername: reactionMember.discordUsername,
+                discordGlobalName: reactionMember.discordGlobalName,
+                memberName: reactionMember.memberName,
+                displayName: reactionMember.displayName,
             };
+            return participant;
         });
 
         return {

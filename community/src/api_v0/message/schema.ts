@@ -66,12 +66,23 @@ export const reactionMemberSchema = z.object({
     reactions: z.array(z.string()),
 }).openapi("ReactionMember")
 
+// A reaction badge renders names only. Keeping this separate from
+// reactionMemberSchema stops the private member fields from being serialised
+// once per member per emoji; they are sent once in `members` instead.
+export const reactionParticipantSchema = z.object({
+    discordUserId: discordSnowflakeSchema,
+    discordUsername: z.string(),
+    discordGlobalName: z.string().nullable(),
+    memberName: z.string().nullable(),
+    displayName: z.string().nullable(),
+}).openapi("ReactionParticipant")
+
 export const messageReactionSummarySchema = z.object({
     eventMessage: eventMessageSchema,
     reactions: z.array(z.object({
         emoji: z.string(),
         count: z.number(),
-        users: z.array(reactionMemberSchema),
+        users: z.array(reactionParticipantSchema),
     })),
     members: z.array(reactionMemberSchema),
 }).openapi("MessageReactionSummary")
