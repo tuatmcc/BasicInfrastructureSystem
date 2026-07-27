@@ -98,58 +98,46 @@ test('buildMessageReactionSummary includes reaction users, linked personal infor
     assert.equal(summary.eventMessage.id, 'event-1');
     assert.equal(summary.discordMessage.id, '223456789012345678');
     assert.equal(summary.reactions.length, 2);
+    // A reaction badge only needs names. The private member fields must not be
+    // repeated here for every emoji the member reacted with.
     assert.deepEqual(summary.reactions[0].users[0], {
         discordUserId: '423456789012345678',
         discordUsername: 'taro',
         discordGlobalName: 'Taro',
-        userId: 'user-1',
-        userName: 'taro-account',
-        displayName: '太郎',
-        email: 'taro-account@example.com',
-        memberId: 'member-1',
         memberName: '山田 太郎',
-        memberStatus: 'active',
-        displayGrade: 'B2',
-        studentId: 'S001',
-        studentEmail: 'taro@example.edu',
-        emergencyContact: '090-0000-0000',
-        insurance: true,
-        someAllergy: false,
-        allergyDetails: null,
-        skills: ['TypeScript'],
-        interests: ['Robotics'],
-        currentActivities: 'Robot controller',
-        bio: 'Embedded developer',
-        discordNickname: 'たろう',
-        discordRoles: ['Member', 'Developer'],
-        reactions: ['✅'],
+        displayName: '太郎',
     });
     assert.deepEqual(summary.reactions[0].users[1], {
         discordUserId: '523456789012345678',
         discordUsername: 'hanako',
         discordGlobalName: null,
-        userId: null,
-        userName: null,
-        displayName: null,
-        email: null,
-        memberId: null,
         memberName: null,
-        memberStatus: null,
-        displayGrade: null,
-        studentId: null,
-        studentEmail: null,
-        emergencyContact: null,
-        insurance: null,
-        someAllergy: null,
-        allergyDetails: null,
-        skills: [],
-        interests: [],
-        currentActivities: null,
-        bio: null,
-        discordNickname: null,
-        discordRoles: [],
-        reactions: ['✅'],
+        displayName: null,
     });
     assert.deepEqual(summary.members.find(member => member.discordUserId === '423456789012345678')?.reactions, ['✅', '🍱']);
     assert.equal(summary.members.length, 2);
+
+    // The member list stays complete: it is what the admin table and its CSV
+    // export read, including the private fields the organiser needs.
+    const taro = summary.members.find(member => member.discordUserId === '423456789012345678');
+    assert.equal(taro?.emergencyContact, '090-0000-0000');
+    assert.equal(taro?.studentId, 'S001');
+});
+
+test('private member fields are never repeated inside the reaction badges', () => {
+    const summary = buildMessageReactionSummary(
+        eventMessage,
+        discordMessage,
+        reactionUsersByEmoji,
+        linkedUsers,
+    );
+
+    const serialisedBadges = JSON.stringify(summary.reactions);
+    for (const secret of ['090-0000-0000', 'S001', 'taro@example.edu', 'taro-account@example.com']) {
+        assert.equal(
+            serialisedBadges.includes(secret),
+            false,
+            `reaction badges must not carry ${secret}`,
+        );
+    }
 });
