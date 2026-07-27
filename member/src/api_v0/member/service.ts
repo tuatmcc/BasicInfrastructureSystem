@@ -553,19 +553,27 @@ export const listAdminMembersService: RouteHandler<typeof listAdminMembersRoute,
   }
 
   const db = c.get('db')
-  const rows = await db.transaction((tx) => selectMemberRows(
-    tx,
-    conditions.length ? and(...conditions) : undefined,
-    limit + 1,
-  ))
-  const hasNextPage = rows.length > limit
-  const pageRows = hasNextPage ? rows.slice(0, limit) : rows
   const guildId = requireGuildId(c)
-  const evidenceByUserId = await db.transaction((tx) => readDiscordMembershipEvidenceMap(
-    tx,
-    pageRows.map(row => row.userId),
-    guildId,
-  ))
+  // The page and its evidence are read in one transaction: both are pure reads,
+  // so a member cannot change status between the two queries.
+  const { pageRows, hasNextPage, evidenceByUserId } = await db.transaction(async (tx) => {
+    const rows = await selectMemberRows(
+      tx,
+      conditions.length ? and(...conditions) : undefined,
+      limit + 1,
+    )
+    const overflows = rows.length > limit
+    const page = overflows ? rows.slice(0, limit) : rows
+    return {
+      pageRows: page,
+      hasNextPage: overflows,
+      evidenceByUserId: await readDiscordMembershipEvidenceMap(
+        tx,
+        page.map(row => row.userId),
+        guildId,
+      ),
+    }
+  })
 
   return c.json({
     items: pageRows.map(row => toAdminMemberResponse(row, evidenceByUserId.get(row.userId) ?? null)),
@@ -581,20 +589,30 @@ export const getAdminMemberService: RouteHandler<typeof getAdminMemberRoute, App
   }
 
   const db = c.get('db')
-  const row = await db.transaction((tx) => loadMemberRow(tx, c.req.valid('param').id))
-  if (!row) return c.json({ error: 'Member was not found', code: 'member_not_found' }, 404)
-  const evidence = await db.transaction((tx) => readDiscordMembershipEvidence(tx, row.userId, requireGuildId(c)))
-  const history = await db.transaction((tx) => tx
-    .select({
-      fromStatus: memberStatusHistory.fromStatus,
-      toStatus: memberStatusHistory.toStatus,
-      changedByUserId: memberStatusHistory.changedByUserId,
-      reason: memberStatusHistory.reason,
-      createdAt: memberStatusHistory.createdAt,
-    })
-    .from(memberStatusHistory)
-    .where(eq(memberStatusHistory.memberId, row.memberId))
-    .orderBy(desc(memberStatusHistory.createdAt), desc(memberStatusHistory.historyId)))
+  const guildId = requireGuildId(c)
+  // One transaction: these are pure reads with no external call between them, so
+  // the response is also built from a single consistent snapshot.
+  const detail = await db.transaction(async (tx) => {
+    const row = await loadMemberRow(tx, c.req.valid('param').id)
+    if (!row) return null
+    return {
+      row,
+      evidence: await readDiscordMembershipEvidence(tx, row.userId, guildId),
+      history: await tx
+        .select({
+          fromStatus: memberStatusHistory.fromStatus,
+          toStatus: memberStatusHistory.toStatus,
+          changedByUserId: memberStatusHistory.changedByUserId,
+          reason: memberStatusHistory.reason,
+          createdAt: memberStatusHistory.createdAt,
+        })
+        .from(memberStatusHistory)
+        .where(eq(memberStatusHistory.memberId, row.memberId))
+        .orderBy(desc(memberStatusHistory.createdAt), desc(memberStatusHistory.historyId)),
+    }
+  })
+  if (!detail) return c.json({ error: 'Member was not found', code: 'member_not_found' }, 404)
+  const { row, evidence, history } = detail
 
   return c.json({
     ...toAdminMemberResponse(row, evidence),
@@ -863,10 +881,9 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
     throw error
   }
 
-  const updated = await db.transaction((tx) => loadMemberRow(tx, memberId))
-  if (!updated) throw new Error('Updated member could not be reloaded')
-  const evidence = await db.transaction((tx) => readDiscordMembershipEvidence(tx, updated.userId, requireGuildId(c)))
-  return c.json(toAdminMemberResponse(updated, evidence), 200)
+  const result = await db.transaction((tx) => loadResponseForMember(tx, memberId, requireGuildId(c)))
+  if (!result) throw new Error('Updated member could not be reloaded')
+  return c.json(toAdminMemberResponse(result.row, result.evidence), 200)
 }
 
 export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppContext> = async (c) => {
@@ -922,8 +939,7 @@ export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppCont
     throw error
   }
 
-  const rejected = await db.transaction((tx) => loadMemberRow(tx, memberId))
-  if (!rejected) throw new Error('Rejected member could not be reloaded')
-  const evidence = await db.transaction((tx) => readDiscordMembershipEvidence(tx, rejected.userId, requireGuildId(c)))
-  return c.json(toAdminMemberResponse(rejected, evidence), 200)
+  const result = await db.transaction((tx) => loadResponseForMember(tx, memberId, requireGuildId(c)))
+  if (!result) throw new Error('Rejected member could not be reloaded')
+  return c.json(toAdminMemberResponse(result.row, result.evidence), 200)
 }

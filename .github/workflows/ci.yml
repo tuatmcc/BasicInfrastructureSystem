@@ -15,6 +15,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # Replays every migration into a fresh database, so a migration that only
+      # works against an already-populated schema fails here instead of in a
+      # maintenance window.
+      - name: Start the local database
+        run: supabase db start
+      # The RLS boundary and the directory allowlist are enforced in SQL, so the
+      # pgTAP suites under supabase/tests are the only thing that proves them.
+      - name: Run pgTAP suites
+        run: supabase test db
+      - name: Stop the local database
+        if: always()
+        run: supabase stop --no-backup
+
   member:
     runs-on: ubuntu-latest
     steps:
