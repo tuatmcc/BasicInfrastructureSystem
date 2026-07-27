@@ -58,7 +58,9 @@ select is(
 
 select is(
   (
-    select is_nullable
+    -- is_nullable is information_schema.yes_or_no, which pgTAP's polymorphic
+    -- is() cannot match against a text expectation.
+    select is_nullable::text
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'member_status_history'
