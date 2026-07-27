@@ -112,6 +112,16 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
         // Better Auth proved who the caller is; the domain decides what the JWT
         // may claim, so role and membership are read from app_accounts.
         const authDb = getAuthDatabase(c);
+
+        // The create hook normally provisions this row. Repairing it here costs
+        // one statement per sign-in and keeps a subject that slipped through —
+        // a hook that failed, a row seeded outside the flow — from being locked
+        // out permanently with no path back except editing the database.
+        await authDb
+            .insert(schema.appAccounts)
+            .values({ userId: session.user.id })
+            .onConflictDoNothing();
+
         const [currentUser] = await authDb
             .select({
                 role: schema.appAccounts.role,
