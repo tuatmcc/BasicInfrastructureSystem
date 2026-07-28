@@ -22,7 +22,8 @@ begin
   from public.community_identities identity
   join public.community_memberships membership
     on membership.identity_id = identity.identity_id
-  join public.account auth_account
+  -- The authentication tables live in app_auth since the schema split.
+  join app_auth.account auth_account
     on auth_account.id = identity.auth_account_id
   where identity.provider = 'discord'
     and identity.provider_account_id = target_discord_account_id
