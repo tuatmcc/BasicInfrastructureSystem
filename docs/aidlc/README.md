@@ -8,8 +8,8 @@ AI が提案し、人が検証して承認する。承認されていない段�
 | Phase | Stage | 成果物 | 状態 |
 | --- | --- | --- | --- |
 | 1 Ideation | 1.1 Intent Capture | `intent.md` | **承認済み** |
-| 2 Inception | 2.1 Reverse Engineering | `reverse-engineering.md` | **記入済み・承認待ち** |
-| 2 Inception | 2.3 Requirements Analysis | `requirements.md` | 未着手 |
+| 2 Inception | 2.1 Reverse Engineering | `reverse-engineering.md` | **承認済み** |
+| 2 Inception | 2.3 Requirements Analysis | `requirements.md` | **記入済み・承認待ち** |
 | 2 Inception | 2.4 User Stories | `stories.md` / `personas.md` | 未着手 |
 | 2 Inception | 2.6 Domain Design | `components.md` / `decisions.md` | 未着手 |
 | 2 Inception | 2.7 Units Generation | `unit-of-work.md` | 未着手 |
