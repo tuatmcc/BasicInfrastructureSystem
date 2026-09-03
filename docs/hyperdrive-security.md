@@ -60,9 +60,40 @@ this sequence.
 
    Each result must show `caching.disabled: true`, and the origin user must be
    the dedicated login rather than `postgres`.
-7. Deploy both Workers and exercise sign-in, Discord verification, application
-   submission, approval, and directory access. Restore writes only after these
-   checks pass.
+7. Apply the schema split, `20260727000000_split_auth_schema.sql`.
+8. Confirm every Worker has the secrets listed under "Required secrets" before
+   deploying. A missing one fails at runtime, not at deploy time.
+9. Deploy all three Workers and exercise sign-in, Discord verification,
+   application submission, approval, and directory access. Restore writes only
+   after these checks pass.
+
+## Required secrets
+
+Check these with `npx wrangler secret list` in each directory. Deploying a
+Worker whose secrets were only ever set through the dashboard can drop values
+that are not also in `wrangler.jsonc`, so re-check after any deploy.
+
+| Secret | community | member | frontend |
+| --- | --- | --- | --- |
+| `JWT_SECRET` | signs the app token | verifies it | verifies it in middleware |
+| `BETTER_AUTH_SECRET` | yes | — | — |
+| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | yes | — | — |
+| `DISCORD_TOKEN` / `DISCORD_GUILD_ID` | yes | yes | — |
+| `COMMUNITY_URL` / `FRONTEND_URL` | yes | yes | — |
+| `COOKIE_DOMAIN` | yes | — | — |
+
+`JWT_SECRET` must be identical in all three. The frontend needs it because
+`middleware.ts` verifies the token to route admins; without it every request
+throws, redirects to `/login`, and bounces back into a redirect loop.
+
+`member` needs `DISCORD_TOKEN` and `DISCORD_GUILD_ID` because it re-verifies
+guild membership when an application is submitted and again when it is
+approved. A deployment that predates that behaviour will not have them, and the
+join endpoint answers 500 until they are set.
+
+`DATABASE_URL` is only a fallback for the Hyperdrive binding. Leave it unset in
+production rather than holding credentials that would bypass the dedicated
+runtime role if Hyperdrive were unavailable.
 
 ## Database verification
 
@@ -104,7 +135,7 @@ connection override is a Wrangler **process environment variable**, not a
 normal Worker variable:
 
 ```bash
-export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE='postgresql://app_runtime_login:password@localhost:5432/postgres'
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE='postgresql://app_runtime:password@localhost:5432/postgres'
 ```
 
 Do not copy the repository-wide `.env` into both Workers; that exposes secrets

@@ -75,8 +75,12 @@ begin
     raise exception 'runtime role % owns a database or database objects and cannot be safely constrained', runtime_role;
   end if;
 
+  -- Only the password is set here. Restating the attributes would require
+  -- SUPERUSER, which the operator role is not on a managed platform such as
+  -- Supabase, and it is unnecessary: the create above sets them, and the branch
+  -- for an existing role has already verified them.
   execute format(
-    'alter role %I login inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls password %L',
+    'alter role %I password %L',
     runtime_role,
     runtime_password
   );
