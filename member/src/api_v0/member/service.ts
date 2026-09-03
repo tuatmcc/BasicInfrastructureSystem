@@ -216,6 +216,45 @@ export const conflictForUniqueMemberField = (error: unknown) => {
   return { error: 'Application conflicts with an existing record', code: 'application_conflict' }
 }
 
+// Every write to a member row does the same thing: update only while the row is
+// still in the status and version the caller saw, and treat anything else as a
+// conflict. Keeping that in one place means a caller only states what it is
+// changing and which status it is allowed to change from.
+//
+// `reason` is handed to the database rather than written to the history table:
+// the status-history trigger reads it. The application cannot write that table.
+type MemberWrite = {
+  memberId: string
+  /** The status the caller read. The update is refused if it no longer holds. */
+  expectedStatus: MemberStatus
+  /** The version the caller read. The update is refused if it no longer holds. */
+  expectedVersion: number
+  changes: Partial<typeof members.$inferInsert>
+  /** Recorded by the status-history trigger when the status changes. */
+  reason?: string
+}
+
+const writeMemberRow = async (tx: QueryDatabase, write: MemberWrite) => {
+  if (write.reason !== undefined) {
+    await tx.execute(sql`select set_config('app.member_status_reason', ${write.reason}, true)`)
+  }
+
+  const updated = await tx
+    .update(members)
+    .set({
+      ...write.changes,
+      applicationVersion: sql`${members.applicationVersion} + 1`,
+    })
+    .where(and(
+      eq(members.memberId, write.memberId),
+      eq(members.memberStatus, write.expectedStatus),
+      eq(members.applicationVersion, write.expectedVersion),
+    ))
+    .returning({ memberId: members.memberId })
+
+  if (updated.length !== 1) throw new MemberVersionConflictError()
+}
+
 const encodeCursor = (row: Pick<MemberRow, 'submittedAt' | 'memberId'>) => (
   btoa(JSON.stringify({ submittedAt: row.submittedAt, memberId: row.memberId }))
 )
@@ -295,25 +334,20 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
       const expectedVersion = body.expectedVersion
       const now = new Date().toISOString()
       const updated = await db.transaction(async (tx) => {
-        await tx.execute(sql`select set_config('app.member_status_reason', 'resubmitted by applicant', true)`)
-        const rows = await tx
-          .update(members)
-          .set({
+        await writeMemberRow(tx, {
+          memberId: current.memberId,
+          expectedStatus: 'rejected',
+          expectedVersion,
+          reason: 'resubmitted by applicant',
+          changes: {
             ...application,
             memberStatus: 'pending',
-            applicationVersion: sql`${members.applicationVersion} + 1`,
             submittedAt: now,
             reviewedAt: null,
             reviewedByUserId: null,
             reviewReason: null,
-          })
-          .where(and(
-            eq(members.memberId, current.memberId),
-            eq(members.memberStatus, 'rejected'),
-            eq(members.applicationVersion, expectedVersion),
-          ))
-          .returning({ memberId: members.memberId })
-        if (rows.length !== 1) throw new MemberVersionConflictError()
+          },
+        })
         return loadMemberRow(tx, current.memberId)
       })
 
@@ -430,19 +464,12 @@ export const updateMemberService: RouteHandler<typeof updateMemberRoute, AppCont
 
   try {
     const updated = await db.transaction(async (tx) => {
-      const rows = await tx
-        .update(members)
-        .set({
-          ...memberChanges,
-          applicationVersion: sql`${members.applicationVersion} + 1`,
-        })
-        .where(and(
-          eq(members.memberId, current.memberId),
-          eq(members.memberStatus, current.memberStatus),
-          eq(members.applicationVersion, body.expectedVersion),
-        ))
-        .returning({ memberId: members.memberId })
-      if (rows.length !== 1) throw new MemberVersionConflictError()
+      await writeMemberRow(tx, {
+        memberId: current.memberId,
+        expectedStatus: current.memberStatus as MemberStatus,
+        expectedVersion: body.expectedVersion,
+        changes: memberChanges,
+      })
 
       if (editsProfile) {
         const currentProfile = current.profileMemberId ? {
@@ -726,23 +753,18 @@ export const createApproveMemberService = (
   try {
     const displayName = chooseInitialDisplayName(evidence)
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.member_status_reason', 'approved', true)`)
-      const updated = await tx
-        .update(members)
-        .set({
+      await writeMemberRow(tx, {
+        memberId,
+        expectedStatus: 'pending',
+        expectedVersion,
+        reason: 'approved',
+        changes: {
           memberStatus: 'active',
-          applicationVersion: sql`${members.applicationVersion} + 1`,
           reviewedAt: now.toISOString(),
           reviewedByUserId: appUser.id,
           reviewReason: null,
-        })
-        .where(and(
-          eq(members.memberId, memberId),
-          eq(members.memberStatus, 'pending'),
-          eq(members.applicationVersion, expectedVersion),
-        ))
-        .returning({ memberId: members.memberId })
-      if (updated.length !== 1) throw new MemberVersionConflictError()
+        },
+      })
 
       const linked = await tx
         .update(appAccounts)
@@ -861,22 +883,13 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
 
   try {
     await db.transaction(async (tx) => {
-      if (statusChanges) {
-        await tx.execute(sql`select set_config('app.member_status_reason', ${body.reason?.trim()}, true)`)
-      }
-      const updated = await tx
-        .update(members)
-        .set({
-          ...memberChanges,
-          applicationVersion: sql`${members.applicationVersion} + 1`,
-        })
-        .where(and(
-          eq(members.memberId, memberId),
-          eq(members.memberStatus, current.memberStatus),
-          eq(members.applicationVersion, body.expectedVersion),
-        ))
-        .returning({ memberId: members.memberId })
-      if (updated.length !== 1) throw new MemberVersionConflictError()
+      await writeMemberRow(tx, {
+        memberId,
+        expectedStatus: current.memberStatus as MemberStatus,
+        expectedVersion: body.expectedVersion,
+        reason: statusChanges ? body.reason?.trim() : undefined,
+        changes: memberChanges,
+      })
 
       if (editsProfile) {
         const profileSet: Partial<typeof memberDirectoryProfiles.$inferInsert> = {}
@@ -940,23 +953,18 @@ export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppCont
   const now = new Date()
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.member_status_reason', ${reason.trim()}, true)`)
-      const updated = await tx
-        .update(members)
-        .set({
+      await writeMemberRow(tx, {
+        memberId,
+        expectedStatus: 'pending',
+        expectedVersion,
+        reason: reason.trim(),
+        changes: {
           memberStatus: 'rejected',
-          applicationVersion: sql`${members.applicationVersion} + 1`,
           reviewedAt: now.toISOString(),
           reviewedByUserId: appUser.id,
           reviewReason: reason.trim(),
-        })
-        .where(and(
-          eq(members.memberId, memberId),
-          eq(members.memberStatus, 'pending'),
-          eq(members.applicationVersion, expectedVersion),
-        ))
-        .returning({ memberId: members.memberId })
-      if (updated.length !== 1) throw new MemberVersionConflictError()
+        },
+      })
     })
   } catch (error) {
     if (error instanceof MemberVersionConflictError) {
