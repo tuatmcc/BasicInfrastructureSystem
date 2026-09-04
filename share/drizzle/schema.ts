@@ -312,3 +312,79 @@ export const eventMessages = pgTable("event_messages", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 })
+
+// Roles and permissions (docs/aidlc/components.md section 3).
+//
+// A role belongs to a member, never to a login account, so someone who has not
+// joined cannot hold one and replacing a Discord account does not lose it.
+// Permissions reach a member only through a role: there is no table granting a
+// permission to a member directly, which is what makes "why can they do that"
+// a question with one answer.
+
+export const permissions = pgTable("permissions", {
+	permissionKey: text("permission_key").primaryKey(),
+	description: text("description").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	check("permissions_key_shape", sql`
+		${table.permissionKey} ~ '^[a-z][a-z_]*\.[a-z][a-z_]*$'
+	`),
+])
+
+export const roles = pgTable("roles", {
+	roleKey: text("role_key").primaryKey(),
+	displayName: text("display_name").notNull(),
+	description: text("description").default("").notNull(),
+	// A role the application itself depends on, so an administrator tidying up
+	// cannot delete it.
+	isSystem: boolean("is_system").default(false).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	check("roles_key_shape", sql`${table.roleKey} ~ '^[a-z][a-z_]*$'`),
+	check("roles_display_name_length", sql`
+		char_length(${table.displayName}) between 1 and 100
+	`),
+])
+
+export const rolePermissions = pgTable("role_permissions", {
+	roleKey: text("role_key").notNull(),
+	permissionKey: text("permission_key").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.roleKey, table.permissionKey] }),
+	foreignKey({
+		columns: [table.roleKey],
+		foreignColumns: [roles.roleKey],
+		name: "role_permissions_role_key_fkey",
+	}).onUpdate("cascade").onDelete("cascade"),
+	foreignKey({
+		columns: [table.permissionKey],
+		foreignColumns: [permissions.permissionKey],
+		name: "role_permissions_permission_key_fkey",
+	}).onUpdate("cascade").onDelete("restrict"),
+])
+
+export const memberRoles = pgTable("member_roles", {
+	memberId: uuid("member_id").notNull(),
+	roleKey: text("role_key").notNull(),
+	// Immutable actor snapshot, like memberStatusHistory.changedByUserId:
+	// deleting the granting account must not erase who granted this.
+	grantedByUserId: text("granted_by_user_id").notNull(),
+	grantedAt: timestamp("granted_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.memberId, table.roleKey] }),
+	// This foreign key is what makes FR-4.6 true: a person who has not joined
+	// has no member row to point at, so the grant cannot be written.
+	foreignKey({
+		columns: [table.memberId],
+		foreignColumns: [members.memberId],
+		name: "member_roles_member_id_fkey",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.roleKey],
+		foreignColumns: [roles.roleKey],
+		name: "member_roles_role_key_fkey",
+	}).onUpdate("cascade").onDelete("restrict"),
+	index("member_roles_role_key_idx").on(table.roleKey),
+])
