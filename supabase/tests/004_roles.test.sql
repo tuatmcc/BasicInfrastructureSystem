@@ -3,10 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions, pg_catalog;
 
-select plan(15);
+select plan(16);
 
 select has_table('public', 'permissions', 'permissions exist as data, not as a list in the source');
-select has_table('public', 'roles', 'roles exist as rows');
+select has_table('public', 'app_roles', 'roles exist as rows');
 select has_table('public', 'role_permissions', 'roles carry permissions');
 select has_table('public', 'member_roles', 'members hold roles');
 
@@ -51,7 +51,7 @@ select is(
     from pg_class
     where oid in (
       'public.permissions'::regclass,
-      'public.roles'::regclass,
+      'public.app_roles'::regclass,
       'public.role_permissions'::regclass,
       'public.member_roles'::regclass
     ) and relrowsecurity and relforcerowsecurity
@@ -88,7 +88,7 @@ select is(
 );
 
 select is(
-  (select count(*)::integer from public.roles where is_system and role_key in ('member', 'admin')),
+  (select count(*)::integer from public.app_roles where is_system and role_key in ('member', 'admin')),
   2,
   'the roles the application depends on are marked as such'
 );
@@ -146,11 +146,18 @@ select results_eq(
   'a member sees the roles they hold'
 );
 
-select throws_ok(
+-- A DELETE that no policy admits is filtered, not rejected: the statement
+-- succeeds having removed nothing. Only the surviving row proves the point, so
+-- asserting an exception here would have passed for the wrong reason.
+select lives_ok(
   $$delete from public.member_roles where role_key = 'member'$$,
-  '42501',
-  null,
-  'a member cannot revoke a role'
+  'a revoke by a member raises nothing, because RLS filters rather than refuses'
+);
+
+select results_eq(
+  $$select count(*)::integer from public.member_roles$$,
+  array[1],
+  'a member cannot revoke a role: the grant survives the attempt'
 );
 
 select * from finish();

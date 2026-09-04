@@ -29,7 +29,11 @@ create table public.permissions (
 comment on table public.permissions is
   'Every permission the application can check. Referenced by role_permissions.';
 
-create table public.roles (
+-- Named app_roles, not roles: the pre-Better-Auth schema had a public.roles
+-- table, and a test asserts it stays gone. Reusing the name would both defeat
+-- that guard and make the two hard to tell apart when reading history. The
+-- app_ prefix matches app_accounts, which exists for the same reason.
+create table public.app_roles (
   role_key text primary key,
   display_name text not null,
   description text not null default '',
@@ -38,15 +42,15 @@ create table public.roles (
   is_system boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint roles_key_shape check (role_key ~ '^[a-z][a-z_]*$'),
-  constraint roles_display_name_length check (char_length(display_name) between 1 and 100)
+  constraint app_roles_key_shape check (role_key ~ '^[a-z][a-z_]*$'),
+  constraint app_roles_display_name_length check (char_length(display_name) between 1 and 100)
 );
 
-comment on table public.roles is
+comment on table public.app_roles is
   'Named sets of permissions. "admin" is one row here, not a special case.';
 
 create table public.role_permissions (
-  role_key text not null references public.roles(role_key) on update cascade on delete cascade,
+  role_key text not null references public.app_roles(role_key) on update cascade on delete cascade,
   permission_key text not null references public.permissions(permission_key) on update cascade on delete restrict,
   created_at timestamptz not null default now(),
   primary key (role_key, permission_key)
@@ -60,7 +64,7 @@ comment on table public.role_permissions is
 -- the member takes the grants with it.
 create table public.member_roles (
   member_id uuid not null references public.members(member_id) on delete cascade,
-  role_key text not null references public.roles(role_key) on update cascade on delete restrict,
+  role_key text not null references public.app_roles(role_key) on update cascade on delete restrict,
   -- A snapshot, like member_status_history.changed_by_user_id: the account may
   -- be deleted later and the record of who granted this must survive it.
   granted_by_user_id text not null,
@@ -82,7 +86,7 @@ insert into public.permissions (permission_key, description) values
   ('event.manage',        'Create and read event announcements'),
   ('reaction.read',       'Read who reacted to an event announcement');
 
-insert into public.roles (role_key, display_name, description, is_system) values
+insert into public.app_roles (role_key, display_name, description, is_system) values
   ('member', '部員',   'Held by every active member. Carries directory access and nothing else.', true),
   ('admin',  '管理者', 'Runs the club''s side of the system.', true);
 
@@ -126,14 +130,14 @@ where account.role = 'admin'
 on conflict do nothing;
 
 grant select on public.permissions to app_rls;
-grant select on public.roles to app_rls;
+grant select on public.app_roles to app_rls;
 grant select on public.role_permissions to app_rls;
 grant select, insert, delete on public.member_roles to app_rls;
 
 alter table public.permissions enable row level security;
 alter table public.permissions force row level security;
-alter table public.roles enable row level security;
-alter table public.roles force row level security;
+alter table public.app_roles enable row level security;
+alter table public.app_roles force row level security;
 alter table public.role_permissions enable row level security;
 alter table public.role_permissions force row level security;
 alter table public.member_roles enable row level security;
@@ -148,7 +152,7 @@ create policy permissions_select on public.permissions
   for select to app_rls
   using (true);
 
-create policy roles_select on public.roles
+create policy roles_select on public.app_roles
   for select to app_rls
   using (true);
 

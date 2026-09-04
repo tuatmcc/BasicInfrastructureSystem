@@ -331,7 +331,9 @@ export const permissions = pgTable("permissions", {
 	`),
 ])
 
-export const roles = pgTable("roles", {
+// Named app_roles for the same reason app_accounts is: the pre-Better-Auth
+// schema had a public.roles table which a test asserts stays gone.
+export const appRoles = pgTable("app_roles", {
 	roleKey: text("role_key").primaryKey(),
 	displayName: text("display_name").notNull(),
 	description: text("description").default("").notNull(),
@@ -341,8 +343,8 @@ export const roles = pgTable("roles", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
-	check("roles_key_shape", sql`${table.roleKey} ~ '^[a-z][a-z_]*$'`),
-	check("roles_display_name_length", sql`
+	check("app_roles_key_shape", sql`${table.roleKey} ~ '^[a-z][a-z_]*$'`),
+	check("app_roles_display_name_length", sql`
 		char_length(${table.displayName}) between 1 and 100
 	`),
 ])
@@ -355,7 +357,7 @@ export const rolePermissions = pgTable("role_permissions", {
 	primaryKey({ columns: [table.roleKey, table.permissionKey] }),
 	foreignKey({
 		columns: [table.roleKey],
-		foreignColumns: [roles.roleKey],
+		foreignColumns: [appRoles.roleKey],
 		name: "role_permissions_role_key_fkey",
 	}).onUpdate("cascade").onDelete("cascade"),
 	foreignKey({
@@ -383,7 +385,7 @@ export const memberRoles = pgTable("member_roles", {
 	}).onDelete("cascade"),
 	foreignKey({
 		columns: [table.roleKey],
-		foreignColumns: [roles.roleKey],
+		foreignColumns: [appRoles.roleKey],
 		name: "member_roles_role_key_fkey",
 	}).onUpdate("cascade").onDelete("restrict"),
 	index("member_roles_role_key_idx").on(table.roleKey),
