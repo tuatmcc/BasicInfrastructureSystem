@@ -1,8 +1,9 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
+import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
 import { and, eq, gt } from 'drizzle-orm'
-import { appAccounts, session, user } from '../../../share/drizzle/schema'
+import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
   id: string
@@ -13,7 +14,13 @@ export type appUser = {
   name: string
   memberId: string | null
   role: 'admin' | 'user'
+  /**
+   * What this caller may do, resolved through the roles their member holds.
+   * Ask with `can()` from share/permissions; never branch on `role`.
+   */
+  permissions: readonly string[]
 }
+
 
 // Who the caller is, according to the authentication store.
 const subjectSelection = {
@@ -21,10 +28,14 @@ const subjectSelection = {
   name: user.name,
 }
 
-// What the caller may do, according to the domain.
+// What the caller may do, according to the domain: the account, and one row per
+// permission the member's roles carry. Left joins because someone who has not
+// joined has no member row and a member may hold no roles, so those columns
+// come back null.
 const accountSelection = {
   memberId: appAccounts.memberId,
   role: appAccounts.role,
+  permissionKey: rolePermissions.permissionKey,
 }
 
 // This is the boundary between the authentication store and the domain, and the
@@ -56,11 +67,14 @@ const loadAppUser = async (
 
     if (!subject) return null;
 
-    const [account] = await db
+    const grants = await db
       .select(accountSelection)
       .from(appAccounts)
-      .where(eq(appAccounts.userId, subject.id))
-      .limit(1);
+      .leftJoin(memberRoles, eq(memberRoles.memberId, appAccounts.memberId))
+      .leftJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
+      .where(eq(appAccounts.userId, subject.id));
+
+    const [account] = grants;
 
     if (!account) return null;
 
@@ -69,6 +83,9 @@ const loadAppUser = async (
       name: subject.name,
       memberId: account.memberId,
       role: account.role === 'admin' ? 'admin' as const : 'user' as const,
+      // Two roles can carry the same permission, and a caller holding none
+      // arrives as one row whose permission is null.
+      permissions: Array.from(new Set(grants.flatMap((grant) => grant.permissionKey ?? []))),
     };
   });
 

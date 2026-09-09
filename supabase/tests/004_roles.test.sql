@@ -140,10 +140,13 @@ select throws_ok(
   'a member cannot grant themselves a role'
 );
 
+-- Grants are readable to the application, like app_accounts: resolving who is
+-- calling happens before any request context exists. Scoping what a person is
+-- shown is the API's job; RLS here is about who may change a grant.
 select results_eq(
   $$select role_key from public.member_roles$$,
   $$values ('member'::text)$$,
-  'a member sees the roles they hold'
+  'grants are readable so a caller can be resolved at all'
 );
 
 -- A DELETE that no policy admits is filtered, not rejected: the statement

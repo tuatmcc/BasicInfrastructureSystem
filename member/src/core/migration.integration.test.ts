@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
+import { CHECKED_PERMISSIONS } from '../../../share/permissions'
 
 const migrationPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -804,6 +805,33 @@ test('the role migration refuses to run when an admin has no member row', async 
     await assert.rejects(
       client.exec(await readFile(roleTablesMigrationPath, 'utf8')),
       /have no member row/,
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+// U-2 (docs/aidlc/unit-of-work.md). Permissions live in the database, so a
+// permission name in the source is just a string: misspell it and the check
+// silently asks for something nobody holds. This is the check that makes the
+// mismatch fail here instead of in production.
+test('every permission the code checks exists in the database', async () => {
+  const client = await PGlite.create()
+
+  try {
+    await replayThroughSplit(client)
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+
+    const stored = await client.query<{ permission_key: string }>(
+      'select permission_key from public.permissions',
+    )
+    const storedKeys = new Set(stored.rows.map((row) => row.permission_key))
+
+    const missing = CHECKED_PERMISSIONS.filter((key) => !storedKeys.has(key))
+    assert.deepEqual(
+      missing,
+      [],
+      'these permission names appear in the code but not in the database',
     )
   } finally {
     await client.close()

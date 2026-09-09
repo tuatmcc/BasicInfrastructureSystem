@@ -17,9 +17,14 @@ test('auth middleware reloads the application user and does not turn downstream 
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Test User' }]
-        : [{ memberId: null, role: 'user' }];
-      const where = () => ({ limit: async () => rows });
-      return { from: () => ({ innerJoin: () => ({ where }), where }) };
+        : [{ memberId: null, role: 'user', permissionKey: null }];
+      // The domain lookup left-joins the grants and groups by the account, so
+      // the stub has to offer the same shape as the builder it stands in for.
+      const limit = async () => rows;
+      // The domain lookup left-joins the grants; the subject lookup does not.
+      const where = () => Object.assign(limit(), { limit });
+      const leftJoin = () => ({ leftJoin, where });
+      return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
   };
   const db = {
@@ -58,6 +63,8 @@ test('auth middleware reloads the application user and does not turn downstream 
     id: 'user-1',
     name: 'Test User',
     memberId: null,
+    // No member row, so no role, so nothing granted.
+    permissions: [],
     role: 'user',
   });
   assert.deepEqual(capturedIdentity, {
@@ -129,9 +136,12 @@ test('the development bypass still applies to a local request', async () => {
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Local Dev' }]
-        : [{ memberId: null, role: 'user' }];
-      const where = () => ({ limit: async () => rows });
-      return { from: () => ({ innerJoin: () => ({ where }), where }) };
+        : [{ memberId: null, role: 'user', permissionKey: null }];
+      const limit = async () => rows;
+      // The domain lookup left-joins the grants; the subject lookup does not.
+      const where = () => Object.assign(limit(), { limit });
+      const leftJoin = () => ({ leftJoin, where });
+      return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
   };
   const db = {

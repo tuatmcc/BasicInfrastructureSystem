@@ -159,13 +159,19 @@ create policy role_permissions_select on public.role_permissions
   for select to app_rls
   using (true);
 
--- A member sees their own grants; an administrator sees everyone's.
-create policy member_roles_select_self_or_admin on public.member_roles
+-- Readable to the application unconditionally, like app_accounts. Resolving who
+-- is calling has to happen before any request context exists, so a policy that
+-- depends on that context cannot be satisfied here: the read would return
+-- nothing and leave every caller with no permissions at all.
+--
+-- Nothing is given away by this. app_accounts.role already tells the same
+-- application role who is an administrator, and a grant is authorization
+-- metadata rather than a member's personal information — that is what the
+-- directory view and the policies on members exist to protect. Writing is a
+-- different matter and stays restricted below.
+create policy member_roles_select on public.member_roles
   for select to app_rls
-  using (
-    (select current_setting('app.current_user_role', true)) = 'admin'
-    or member_id = nullif((select current_setting('app.current_member_id', true)), '')::uuid
-  );
+  using (true);
 
 create policy member_roles_insert_admin on public.member_roles
   for insert to app_rls
