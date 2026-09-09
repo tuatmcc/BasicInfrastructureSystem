@@ -126,8 +126,7 @@ insert into public.member_roles (member_id, role_key, granted_by_user_id)
 select account.member_id, 'admin', 'system:20260904000000'
 from public.app_accounts account
 join public.members member on member.member_id = account.member_id
-where account.role = 'admin'
-on conflict do nothing;
+where account.role = 'admin';
 
 grant select on public.permissions to app_rls;
 grant select on public.app_roles to app_rls;
