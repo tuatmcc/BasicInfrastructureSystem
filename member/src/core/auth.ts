@@ -38,14 +38,6 @@ const accountSelection = {
   permissionKey: rolePermissions.permissionKey,
 }
 
-// The same permission can arrive from two roles, and a caller holding no roles
-// arrives as a single row whose permission column is null.
-const collectPermissions = (grants: { permissionKey: string | null }[]) => (
-  Array.from(new Set(
-    grants.map((grant) => grant.permissionKey).filter((key) => key !== null),
-  ))
-)
-
 // This is the boundary between the authentication store and the domain, and the
 // only place that reads both. The two lookups stay separate rather than joining
 // across app_auth and public, so moving the authentication store to its own
@@ -91,7 +83,9 @@ const loadAppUser = async (
       name: subject.name,
       memberId: account.memberId,
       role: account.role === 'admin' ? 'admin' as const : 'user' as const,
-      permissions: collectPermissions(grants),
+      // Two roles can carry the same permission, and a caller holding none
+      // arrives as one row whose permission is null.
+      permissions: Array.from(new Set(grants.flatMap((grant) => grant.permissionKey ?? []))),
     };
   });
 
