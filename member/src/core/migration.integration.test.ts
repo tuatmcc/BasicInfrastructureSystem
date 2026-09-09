@@ -17,6 +17,10 @@ const splitAuthSchemaMigrationPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../supabase/migrations/20260727000000_split_auth_schema.sql',
 )
+const roleTablesMigrationPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../supabase/migrations/20260904000000_add_role_tables.sql',
+)
 const confirmedTestDataPurgeRunbookPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../../supabase/runbooks/purge_confirmed_test_membership_data.sql',
@@ -656,6 +660,151 @@ test('splitting the auth schema leaves no reference from the domain into app_aut
         )
     `)
     assert.deepEqual(crossings.rows, [])
+  } finally {
+    await client.close()
+  }
+})
+
+// U-1 (docs/aidlc/unit-of-work.md): roles move off the login account and onto
+// the member. The migration only adds, so what matters is that it carries the
+// existing state across unchanged and that the new tables refuse a grant the
+// requirements say must be impossible.
+const replayThroughSplit = async (client: PGlite) => {
+  await createCurrentSchema(client, false)
+  await client.exec(await readFile(membershipWorkflowMigrationPath, 'utf8'))
+  await client.exec(await readFile(splitAuthSchemaMigrationPath, 'utf8'))
+}
+
+// Seeding has to follow the real path: the trigger cross-checks the role the
+// caller claims against app_accounts, so an actor cannot simply assert it is an
+// admin. The first admin is bootstrapped the way production was — apply, then
+// promote the column directly — because approving requires an admin to exist.
+const applyAsNewUser = async (
+  client: PGlite,
+  { userId, memberId }: { userId: string; memberId: string },
+) => {
+  await client.exec(`
+    insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
+    values ('${userId}', '${userId}', '${userId}@example.test', true, now(), now());
+    insert into public.app_accounts (user_id, role) values ('${userId}', 'user');
+
+    select set_config('app.current_user_id', '${userId}', false);
+    select set_config('app.current_member_id', '${memberId}', false);
+    select set_config('app.current_user_role', 'user', false);
+    insert into public.members (
+      member_id, registered_name, grade_id, emergency_contact, student_id, student_email
+    ) values (
+      '${memberId}', '${userId}', 1, 'contact', upper('${userId}'), '${userId}@student.example'
+    );
+
+    update public.app_accounts set member_id = '${memberId}' where user_id = '${userId}';
+  `)
+}
+
+const promoteToAdmin = (client: PGlite, userId: string) =>
+  client.exec(`update public.app_accounts set role = 'admin' where user_id = '${userId}'`)
+
+const approveMember = (client: PGlite, adminUserId: string, memberId: string) =>
+  client.exec(`
+    select set_config('app.current_user_id', '${adminUserId}', false);
+    select set_config('app.current_member_id', '', false);
+    select set_config('app.current_user_role', 'admin', false);
+    update public.members
+    set member_status = 'active',
+        reviewed_at = now(),
+        reviewed_by_user_id = '${adminUserId}',
+        application_version = application_version + 1
+    where member_id = '${memberId}';
+  `)
+
+test('the role tables carry the existing admin column across unchanged', async () => {
+  const client = await PGlite.create()
+
+  try {
+    await replayThroughSplit(client)
+    const adminMemberId = '00000000-0000-4000-8000-000000000201'
+    const plainMemberId = '00000000-0000-4000-8000-000000000202'
+
+    await applyAsNewUser(client, { userId: 'role-admin', memberId: adminMemberId })
+    await promoteToAdmin(client, 'role-admin')
+    await approveMember(client, 'role-admin', adminMemberId)
+
+    await applyAsNewUser(client, { userId: 'role-member', memberId: plainMemberId })
+    await approveMember(client, 'role-admin', plainMemberId)
+
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+
+    // Everyone active holds the base role; only the old column's admin also
+    // holds admin. Until U-4 removes that column the two must agree.
+    const grants = await client.query<{ member_id: string; role_key: string }>(`
+      select member_id::text, role_key
+      from public.member_roles
+      order by member_id, role_key
+    `)
+    assert.deepEqual(grants.rows, [
+      { member_id: '00000000-0000-4000-8000-000000000201', role_key: 'admin' },
+      { member_id: '00000000-0000-4000-8000-000000000201', role_key: 'member' },
+      { member_id: '00000000-0000-4000-8000-000000000202', role_key: 'member' },
+    ])
+
+    // The base role opens the directory and nothing else. Everything an
+    // administrator can do has to be reachable from the admin role instead.
+    const carried = await client.query<{ role_key: string; permissions: number }>(`
+      select role_key, count(*)::int as permissions
+      from public.role_permissions
+      group by role_key
+      order by role_key
+    `)
+    assert.deepEqual(carried.rows, [
+      { role_key: 'admin', permissions: 7 },
+      { role_key: 'member', permissions: 1 },
+    ])
+  } finally {
+    await client.close()
+  }
+})
+
+test('a role cannot be granted to someone who is not a member', async () => {
+  const client = await PGlite.create()
+
+  try {
+    await replayThroughSplit(client)
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+
+    // FR-4.6. There is no member row to point at, so the grant has nowhere to
+    // land — the constraint refuses it rather than the application remembering
+    // to check.
+    await assert.rejects(
+      client.exec(`
+        insert into public.member_roles (member_id, role_key, granted_by_user_id)
+        values ('00000000-0000-4000-8000-000000000999', 'admin', 'someone')
+      `),
+      /foreign key/i,
+    )
+  } finally {
+    await client.close()
+  }
+})
+
+test('the role migration refuses to run when an admin has no member row', async () => {
+  const client = await PGlite.create()
+
+  try {
+    await replayThroughSplit(client)
+    await client.exec(`
+      insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
+      values ('stray-admin', 'Stray', 'stray@example.test', true, now(), now());
+      insert into public.app_accounts (user_id, member_id, role)
+      values ('stray-admin', null, 'admin');
+    `)
+
+    // docs/aidlc/intent.md 6.4 settles that an administrator is always a member.
+    // Such an account cannot hold a role, and quietly dropping its privileges
+    // mid-migration would be a worse outcome than refusing to migrate.
+    await assert.rejects(
+      client.exec(await readFile(roleTablesMigrationPath, 'utf8')),
+      /have no member row/,
+    )
   } finally {
     await client.close()
   }
