@@ -1,8 +1,9 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
+import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
 import { and, eq, gt } from 'drizzle-orm'
-import { appAccounts, session, user } from '../../../share/drizzle/schema'
+import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
   id: string
@@ -13,6 +14,31 @@ export type appUser = {
   name: string
   memberId: string | null
   role: 'admin' | 'user'
+  /**
+   * What this caller may do, resolved through the roles their member holds.
+   * Ask with `can()` from share/permissions; never branch on `role`.
+   */
+  permissions: readonly string[]
+}
+
+// Permissions are read in a second transaction, after the identity is installed.
+// member_roles is only readable by the member it belongs to (or an admin), and
+// that policy needs app.current_member_id — which is not set until the caller
+// has been resolved. Reading it earlier would return nothing and quietly leave
+// everyone with no permissions.
+const loadPermissions = async (
+  db: RlsDatabase,
+  memberId: string | null,
+): Promise<readonly string[]> => {
+  if (!memberId) return []
+
+  const rows = await db.transaction((tx) => tx
+    .selectDistinct({ permissionKey: rolePermissions.permissionKey })
+    .from(memberRoles)
+    .innerJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
+    .where(eq(memberRoles.memberId, memberId)))
+
+  return rows.map((row) => row.permissionKey)
 }
 
 // Who the caller is, according to the authentication store.
@@ -82,7 +108,7 @@ const loadAppUser = async (
     role: resolved.role,
   });
 
-  return resolved;
+  return { ...resolved, permissions: await loadPermissions(c.get('db'), resolved.memberId) };
 }
 
 // The development bypass skips token verification entirely, so reaching it on a

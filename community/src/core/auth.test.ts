@@ -58,6 +58,8 @@ test('auth middleware reloads the application user and does not turn downstream 
     id: 'user-1',
     name: 'Test User',
     memberId: null,
+    // No member row, so no role, so nothing granted.
+    permissions: [],
     role: 'user',
   });
   assert.deepEqual(capturedIdentity, {
