@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions, pg_catalog;
 
-select plan(15);
+select plan(16);
 
 select has_table('public', 'permissions', 'permissions exist as data, not as a list in the source');
 select has_table('public', 'app_roles', 'roles exist as rows');
