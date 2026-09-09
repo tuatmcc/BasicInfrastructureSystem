@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
-import { and, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt } from 'drizzle-orm'
 import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
@@ -28,22 +28,14 @@ const subjectSelection = {
   name: user.name,
 }
 
-// What the caller may do, according to the domain.
-//
-// The permissions are aggregated here rather than fetched afterwards, so the
-// whole domain side of a caller is one query and one consistent moment. Left
-// joins because a caller who has not joined has no member row, and a member may
-// hold no roles; the filter drops the nulls those produce.
+// What the caller may do, according to the domain: the account, and one row per
+// permission the member's roles carry. Left joins because someone who has not
+// joined has no member row and a member may hold no roles, so those columns
+// come back null.
 const accountSelection = {
   memberId: appAccounts.memberId,
   role: appAccounts.role,
-  permissions: sql<string[]>`
-    coalesce(
-      array_agg(distinct ${rolePermissions.permissionKey})
-        filter (where ${rolePermissions.permissionKey} is not null),
-      '{}'
-    )
-  `,
+  permissionKey: rolePermissions.permissionKey,
 }
 
 // This is the boundary between the authentication store and the domain, and the
@@ -75,14 +67,14 @@ const loadAppUser = async (
 
     if (!subject) return null;
 
-    const [account] = await db
+    const grants = await db
       .select(accountSelection)
       .from(appAccounts)
       .leftJoin(memberRoles, eq(memberRoles.memberId, appAccounts.memberId))
       .leftJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
-      .where(eq(appAccounts.userId, subject.id))
-      .groupBy(appAccounts.memberId, appAccounts.role)
-      .limit(1);
+      .where(eq(appAccounts.userId, subject.id));
+
+    const [account] = grants;
 
     if (!account) return null;
 
@@ -91,7 +83,11 @@ const loadAppUser = async (
       name: subject.name,
       memberId: account.memberId,
       role: account.role === 'admin' ? 'admin' as const : 'user' as const,
-      permissions: account.permissions,
+      // The same permission can arrive from two roles, and a caller holding no
+      // roles arrives as a single row whose permission column is null.
+      permissions: [...new Set(
+        grants.map((grant) => grant.permissionKey).filter((key) => key !== null),
+      )],
     };
   });
 

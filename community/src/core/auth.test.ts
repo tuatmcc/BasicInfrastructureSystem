@@ -17,12 +17,12 @@ test('auth middleware reloads the application user and does not turn downstream 
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Test User' }]
-        : [{ memberId: null, role: 'user', permissions: [] }];
+        : [{ memberId: null, role: 'user', permissionKey: null }];
       // The domain lookup left-joins the grants and groups by the account, so
       // the stub has to offer the same shape as the builder it stands in for.
       const limit = async () => rows;
-      const groupBy = () => ({ limit });
-      const where = () => ({ limit, groupBy });
+      // The domain lookup left-joins the grants; the subject lookup does not.
+      const where = () => Object.assign(limit(), { limit });
       const leftJoin = () => ({ leftJoin, where });
       return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
@@ -136,10 +136,10 @@ test('the development bypass still applies to a local request', async () => {
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Local Dev' }]
-        : [{ memberId: null, role: 'user', permissions: [] }];
+        : [{ memberId: null, role: 'user', permissionKey: null }];
       const limit = async () => rows;
-      const groupBy = () => ({ limit });
-      const where = () => ({ limit, groupBy });
+      // The domain lookup left-joins the grants; the subject lookup does not.
+      const where = () => Object.assign(limit(), { limit });
       const leftJoin = () => ({ leftJoin, where });
       return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
