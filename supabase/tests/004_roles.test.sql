@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions, pg_catalog;
 
-select plan(16);
+select plan(15);
 
 select has_table('public', 'permissions', 'permissions exist as data, not as a list in the source');
 select has_table('public', 'app_roles', 'roles exist as rows');
@@ -140,10 +140,13 @@ select throws_ok(
   'a member cannot grant themselves a role'
 );
 
+-- Grants are readable to the application, like app_accounts: resolving who is
+-- calling happens before any request context exists. Scoping what a person is
+-- shown is the API's job; RLS here is about who may change a grant.
 select results_eq(
   $$select role_key from public.member_roles$$,
   $$values ('member'::text)$$,
-  'a member sees the roles they hold'
+  'grants are readable so a caller can be resolved at all'
 );
 
 -- A DELETE that no policy admits is filtered, not rejected: the statement

@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
@@ -21,25 +21,6 @@ export type appUser = {
   permissions: readonly string[]
 }
 
-// Permissions are read in a second transaction, after the identity is installed.
-// member_roles is only readable by the member it belongs to (or an admin), and
-// that policy needs app.current_member_id — which is not set until the caller
-// has been resolved. Reading it earlier would return nothing and quietly leave
-// everyone with no permissions.
-const loadPermissions = async (
-  db: RlsDatabase,
-  memberId: string | null,
-): Promise<readonly string[]> => {
-  if (!memberId) return []
-
-  const rows = await db.transaction((tx) => tx
-    .selectDistinct({ permissionKey: rolePermissions.permissionKey })
-    .from(memberRoles)
-    .innerJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
-    .where(eq(memberRoles.memberId, memberId)))
-
-  return rows.map((row) => row.permissionKey)
-}
 
 // Who the caller is, according to the authentication store.
 const subjectSelection = {
@@ -48,9 +29,21 @@ const subjectSelection = {
 }
 
 // What the caller may do, according to the domain.
+//
+// The permissions are aggregated here rather than fetched afterwards, so the
+// whole domain side of a caller is one query and one consistent moment. Left
+// joins because a caller who has not joined has no member row, and a member may
+// hold no roles; the filter drops the nulls those produce.
 const accountSelection = {
   memberId: appAccounts.memberId,
   role: appAccounts.role,
+  permissions: sql<string[]>`
+    coalesce(
+      array_agg(distinct ${rolePermissions.permissionKey})
+        filter (where ${rolePermissions.permissionKey} is not null),
+      '{}'
+    )
+  `,
 }
 
 // This is the boundary between the authentication store and the domain, and the
@@ -85,7 +78,10 @@ const loadAppUser = async (
     const [account] = await db
       .select(accountSelection)
       .from(appAccounts)
+      .leftJoin(memberRoles, eq(memberRoles.memberId, appAccounts.memberId))
+      .leftJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
       .where(eq(appAccounts.userId, subject.id))
+      .groupBy(appAccounts.memberId, appAccounts.role)
       .limit(1);
 
     if (!account) return null;
@@ -95,6 +91,7 @@ const loadAppUser = async (
       name: subject.name,
       memberId: account.memberId,
       role: account.role === 'admin' ? 'admin' as const : 'user' as const,
+      permissions: account.permissions,
     };
   });
 
@@ -108,7 +105,7 @@ const loadAppUser = async (
     role: resolved.role,
   });
 
-  return { ...resolved, permissions: await loadPermissions(c.get('db'), resolved.memberId) };
+  return resolved;
 }
 
 // The development bypass skips token verification entirely, so reaching it on a
