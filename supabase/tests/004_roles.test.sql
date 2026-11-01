@@ -140,11 +140,29 @@ select throws_ok(
   'a member cannot grant themselves a role'
 );
 
+-- Grants are readable to the application, like app_accounts: resolving who is
+-- calling happens before any request context exists. Scoping what a person is
+-- shown is the API's job; RLS here is about who may change a grant.
+--
+-- So read them the way the auth middleware does, with no context set. Read with
+-- the member's context instead and a policy scoped to the member's own rows
+-- would pass too, and narrowing it back would leave every caller with no
+-- permissions while this suite stayed green.
+select
+  set_config('app.current_user_id', '', true),
+  set_config('app.current_member_id', '', true),
+  set_config('app.current_user_role', '', true);
+
 select results_eq(
   $$select role_key from public.member_roles$$,
   $$values ('member'::text)$$,
-  'a member sees the roles they hold'
+  'grants are readable before the caller is resolved'
 );
+
+select
+  set_config('app.current_user_id', 'roles-member', true),
+  set_config('app.current_member_id', '00000000-0000-4000-8000-00000000030a', true),
+  set_config('app.current_user_role', 'user', true);
 
 -- A DELETE that no policy admits is filtered, not rejected: the statement
 -- succeeds having removed nothing. Only the surviving row proves the point, so

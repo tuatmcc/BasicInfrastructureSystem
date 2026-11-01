@@ -20,6 +20,7 @@ import {
   updateMemberService,
 } from './service'
 import { chooseInitialDisplayName, type DiscordMembershipEvidence } from './verification'
+import { CHECKED_PERMISSIONS } from '../../../../share/permissions'
 
 type JsonResponse = { body: unknown; status: number }
 
@@ -39,6 +40,8 @@ const applicant: appUser = {
   name: 'Applicant',
   memberId: null,
   role: 'user',
+  // Not a member yet, so no role grants it anything.
+  permissions: [],
 }
 
 const admin: appUser = {
@@ -46,6 +49,7 @@ const admin: appUser = {
   name: 'Admin',
   memberId: null,
   role: 'admin',
+  permissions: [...CHECKED_PERMISSIONS],
 }
 
 const createContext = (
@@ -764,6 +768,18 @@ test('development auth reloads memberId and downstream failures remain server er
         user_id text not null references app_auth."user"(id),
         expires_at timestamp not null
       );
+      create table app_roles (role_key text primary key);
+      create table permissions (permission_key text primary key);
+      create table role_permissions (
+        role_key text not null references app_roles(role_key),
+        permission_key text not null references permissions(permission_key),
+        primary key (role_key, permission_key)
+      );
+      create table member_roles (
+        member_id uuid not null references members(member_id),
+        role_key text not null references app_roles(role_key),
+        primary key (member_id, role_key)
+      );
       insert into members values ('${memberId}');
       insert into app_auth."user" values ('user-1', 'test-user');
       insert into app_accounts values ('user-1', '${memberId}', 'user');
@@ -772,6 +788,7 @@ test('development auth reloads memberId and downstream failures remain server er
       grant usage on schema app_auth to app_rls;
       grant select on app_auth."user", app_auth.session to app_rls;
       grant select on app_accounts to app_rls;
+      grant select on member_roles, role_permissions to app_rls;
       set role app_rls;
     `)
     const db = createRlsDatabase(drizzle(client) as never)
