@@ -1,9 +1,8 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
-import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
-import { and, eq, gt } from 'drizzle-orm'
-import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
+import { and, eq, gt, sql } from 'drizzle-orm'
+import { appAccounts, session, user } from '../../../share/drizzle/schema'
 
 export type authUser = {
   id: string
@@ -13,10 +12,9 @@ export type appUser = {
   id: string
   name: string
   memberId: string | null
-  role: 'admin' | 'user'
   /**
    * What this caller may do, resolved through the roles their member holds.
-   * Ask with `can()` from share/permissions; never branch on `role`.
+   * Ask with `can()` from share/permissions; never branch on a role name.
    */
   permissions: readonly string[]
 }
@@ -28,14 +26,10 @@ const subjectSelection = {
   name: user.name,
 }
 
-// What the caller may do, according to the domain: the account, and one row per
-// permission the member's roles carry. Left joins because someone who has not
-// joined has no member row and a member may hold no roles, so those columns
-// come back null.
+// Resolve permissions through the same database function used by RLS.
 const accountSelection = {
   memberId: appAccounts.memberId,
-  role: appAccounts.role,
-  permissionKey: rolePermissions.permissionKey,
+  permissions: sql<string[]>`app_private.permissions_for(${appAccounts.userId})`,
 }
 
 // This is the boundary between the authentication store and the domain, and the
@@ -67,14 +61,10 @@ const loadAppUser = async (
 
     if (!subject) return null;
 
-    const grants = await db
+    const [account] = await db
       .select(accountSelection)
       .from(appAccounts)
-      .leftJoin(memberRoles, eq(memberRoles.memberId, appAccounts.memberId))
-      .leftJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
       .where(eq(appAccounts.userId, subject.id));
-
-    const [account] = grants;
 
     if (!account) return null;
 
@@ -82,10 +72,7 @@ const loadAppUser = async (
       id: subject.id,
       name: subject.name,
       memberId: account.memberId,
-      role: account.role === 'admin' ? 'admin' as const : 'user' as const,
-      // Two roles can carry the same permission, and a caller holding none
-      // arrives as one row whose permission is null.
-      permissions: Array.from(new Set(grants.flatMap((grant) => grant.permissionKey ?? []))),
+      permissions: account.permissions,
     };
   });
 
@@ -95,8 +82,6 @@ const loadAppUser = async (
 
   c.get('db').setIdentity({
     userId: resolved.id,
-    memberId: resolved.memberId,
-    role: resolved.role,
   });
 
   return resolved;

@@ -15,7 +15,7 @@ export const CurrentUserSchema = z.object({
     emailVerified: z.boolean(),
     image: z.string().nullable(),
     memberId: z.string().uuid().nullable(),
-    role: z.enum(["user", "admin"]),
+    permissions: z.array(z.string()),
 }).openapi("CurrentUser")
 
 // Better Auth owns identity, account linkage, member linkage, and application

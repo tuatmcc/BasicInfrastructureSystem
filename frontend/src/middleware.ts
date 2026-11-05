@@ -30,16 +30,21 @@ export async function middleware(request: NextRequest) {
   // Admin check and default landing split
   if (token && (pathname.startsWith('/event') || pathname.startsWith('/admin') || pathname === '/')) {
     try {
-        const jwtSecret = process.env.JWT_SECRET;
-        if (!jwtSecret) {
-          throw new Error('[Middleware] Configuration error: JWT_SECRET environment variable is missing.');
-        }
-
-        const { jwtVerify } = await import('jose')
-        const secret = new TextEncoder().encode(jwtSecret)
-        const { payload } = await jwtVerify(token.value, secret)
-        if (payload.role !== 'admin') {
-          return NextResponse.redirect(new URL('/me', request.url))
+        // The API validates the session and resolves current database permissions.
+        // A signed JWT's login-time role cannot reflect a later revocation.
+        const apiUrl = process.env.NEXT_PUBLIC_COMMUNITY_API_URL;
+        if (!apiUrl) throw new Error('Community API URL is not configured');
+        const response = await fetch(new URL('/api/v0/user/me', apiUrl), {
+          headers: { Authorization: `Bearer ${token.value}` },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) return NextResponse.redirect(new URL('/login', request.url));
+        const currentUser = await response.json() as { permissions?: unknown };
+        const permissions = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
+        const required = pathname.startsWith('/admin') ? 'member.read_private' : 'event.manage';
+        if (!permissions.includes(required)) {
+          return NextResponse.redirect(new URL('/me', request.url));
         }
     } catch (error) {
         console.error('[Middleware] Admin check error:', error)

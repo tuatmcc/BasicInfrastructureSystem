@@ -22,12 +22,10 @@ test('RLS transactions snapshot identity and serialize SET LOCAL context', async
   }
   const rls = createRlsDatabase(database as never)
 
-  rls.setIdentity({ userId: 'user-one', memberId: null, role: 'user' })
+  rls.setIdentity({ userId: 'user-one' })
   const first = rls.transaction(async () => 'first')
   rls.setIdentity({
     userId: 'user-two',
-    memberId: '00000000-0000-4000-8000-000000000002',
-    role: 'admin',
   })
   const second = rls.transaction(async () => 'second')
 
@@ -41,10 +39,10 @@ test('RLS transactions snapshot identity and serialize SET LOCAL context', async
     assert.match(statements[1]?.sql ?? '', /set_config\('lock_timeout'/)
     assert.match(statements[1]?.sql ?? '', /set_config\('idle_in_transaction_session_timeout'/)
   }
-  assert.deepEqual(transactions[0][1]?.params.slice(0, 3), ['user-one', '', 'user'])
+  assert.deepEqual(transactions[0][1]?.params, ['user-one'])
   assert.deepEqual(
-    transactions[1][1]?.params.slice(0, 3),
-    ['user-two', '00000000-0000-4000-8000-000000000002', 'admin'],
+    transactions[1][1]?.params,
+    ['user-two'],
   )
 })
 

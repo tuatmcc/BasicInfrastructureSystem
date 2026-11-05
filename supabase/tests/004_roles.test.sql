@@ -100,13 +100,20 @@ set local role app_rls;
 insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
 values ('roles-admin', 'Admin', 'roles-admin@example.test', true, now(), now()),
        ('roles-member', 'Member', 'roles-member@example.test', true, now(), now());
-insert into public.app_accounts (user_id, role)
-values ('roles-admin', 'admin'), ('roles-member', 'user');
+insert into public.app_accounts (user_id)
+values ('roles-admin'), ('roles-member');
+
+reset role;
+select set_config('app.current_user_id', 'roles-admin', true);
+insert into public.members(member_id, registered_name, grade_id, emergency_contact, student_id, student_email)
+values ('00000000-0000-4000-8000-00000000030b', 'Bootstrap', 1, 'contact', 'BOOTSTRAP', 'bootstrap@student.example');
+update public.app_accounts set member_id = '00000000-0000-4000-8000-00000000030b' where user_id = 'roles-admin';
+insert into public.member_roles(member_id, role_key, granted_by_user_id)
+values ('00000000-0000-4000-8000-00000000030b', 'admin', 'test-bootstrap');
+set local role app_rls;
 
 select
-  set_config('app.current_user_id', 'roles-admin', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', 'admin', true);
+  set_config('app.current_user_id', 'roles-admin', true);
 
 insert into public.members (
   member_id, registered_name, grade_id, emergency_contact, student_id, student_email
@@ -126,9 +133,7 @@ select lives_ok(
 );
 
 select
-  set_config('app.current_user_id', 'roles-member', true),
-  set_config('app.current_member_id', '00000000-0000-4000-8000-00000000030a', true),
-  set_config('app.current_user_role', 'user', true);
+  set_config('app.current_user_id', 'roles-member', true);
 
 select throws_ok(
   $$
@@ -149,20 +154,16 @@ select throws_ok(
 -- would pass too, and narrowing it back would leave every caller with no
 -- permissions while this suite stayed green.
 select
-  set_config('app.current_user_id', '', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', '', true);
+  set_config('app.current_user_id', '', true);
 
 select results_eq(
-  $$select role_key from public.member_roles$$,
+  $$select role_key from public.member_roles where member_id = '00000000-0000-4000-8000-00000000030a'$$,
   $$values ('member'::text)$$,
   'grants are readable before the caller is resolved'
 );
 
 select
-  set_config('app.current_user_id', 'roles-member', true),
-  set_config('app.current_member_id', '00000000-0000-4000-8000-00000000030a', true),
-  set_config('app.current_user_role', 'user', true);
+  set_config('app.current_user_id', 'roles-member', true);
 
 -- A DELETE that no policy admits is filtered, not rejected: the statement
 -- succeeds having removed nothing. Only the surviving row proves the point, so
@@ -173,7 +174,7 @@ select lives_ok(
 );
 
 select results_eq(
-  $$select count(*)::integer from public.member_roles$$,
+  $$select count(*)::integer from public.member_roles where member_id = '00000000-0000-4000-8000-00000000030a'$$,
   array[1],
   'a member cannot revoke a role: the grant survives the attempt'
 );

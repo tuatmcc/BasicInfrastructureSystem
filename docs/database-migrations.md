@@ -136,3 +136,31 @@ target server, run the checked template in
 `supabase/runbooks/promote_initial_admin.sql`. The template selects exactly one
 user through the verified OAuth provider account and guild membership; it does
 not embed a personal ID in a migration.
+
+
+## Permission enforcement (U-3)
+
+`20261105072955_enforce_permissions.sql` replaces application role claims with
+`app_private.permissions_for(user_id)` and `has_permission(user_id, permission)`.
+Both API authentication and RLS use this resolver. The runtime passes only
+`app.current_user_id`; ownership is read from `app_accounts`, and its old `role`
+column is removed. Historical migrations retain the old column until this step.
+
+Deploy the application and this migration together. The current-user response
+now returns `permissions`, not `role`; JWTs contain identity/session claims only.
+Management-page routing rechecks the current user through the API with caching
+disabled, so a token issued before a revocation does not retain page access.
+
+Membership review uses `member.review`; private reads use `member.read_private`;
+editing and withdrawal use `member.edit`. Membership mutations also require
+`member.read_private` because their responses include private member details.
+Event operations use `event.manage`;
+reaction reads use `reaction.read`; role grants/revocations use `role.manage`.
+The directory requires `member.read_public`. Approval grants the fixed base
+`member` role through an internal trigger, so new members receive the same
+access as members seeded by U-1. Grade data remains migration-managed.
+
+The operator-only `promote_initial_admin.sql` now grants a member role. Submit a
+membership application before running it. UI-based delegation and last-manager
+protection remain U-5; automatic revocation on withdrawal remains U-6. This
+change alone does not satisfy the project's conditions for opening the service.

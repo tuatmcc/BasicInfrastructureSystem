@@ -1,3 +1,4 @@
+import { can } from "../../../../../share/permissions";
 import { RouteHandler } from "@hono/zod-openapi";
 import { AppContext } from "../../../core/types";
 import { getUserByIdRoute, updateUserByIdRoute, deleteUserByIdRoute } from "./schema";
@@ -10,7 +11,7 @@ export const getUserByIdService: RouteHandler<typeof getUserByIdRoute, AppContex
     if (!userId) {
         return c.json({ message: "User ID is required" }, 401);
     }
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "member.read_private")) {
         return c.json({ message: "Forbidden" }, 403);
     }
     const db = c.get("db");
@@ -33,7 +34,7 @@ export const updateUserByIdService: RouteHandler<typeof updateUserByIdRoute, App
     if (!userId) {
         return c.json({ message: "User ID is required" }, 401);
     }
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "member.edit")) {
         return c.json({ message: "Forbidden" }, 403);
     }
     const db = c.get("db");
@@ -60,7 +61,7 @@ export const deleteUserByIdService: RouteHandler<typeof deleteUserByIdRoute, App
     if (!userId) {
         return c.body(null, 204);
     }
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "member.edit")) {
         return c.json({ message: "Forbidden" }, 403);
     }
     const db = c.get("db");

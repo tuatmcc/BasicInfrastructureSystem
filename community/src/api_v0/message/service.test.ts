@@ -7,16 +7,15 @@ import {
 } from './service';
 
 const adminUser = {
-    id: 'admin-1',
+    id: 'admin-1', permissions: ['event.manage', 'reaction.read'],
     discordid: null,
     name: 'Admin',
     displayName: 'Admin',
-    role: 'admin' as const,
 };
 
 const normalUser = {
     ...adminUser,
-    role: 'user' as const,
+    permissions: [],
 };
 
 const createContext = (overrides: {

@@ -1,3 +1,4 @@
+import { can } from "../../../../share/permissions";
 import { RouteHandler } from "@hono/zod-openapi";
 import { AppContext } from "../../core/types";
 import { createUserRoute, listUsersRoute } from "./schema";
@@ -9,7 +10,7 @@ export const createUserService: RouteHandler<typeof createUserRoute, AppContext>
     const body = c.req.valid("json");
     const now = new Date();
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "member.edit")) {
         return c.json({ message: "Forbidden" }, 403);
     }
 
@@ -30,7 +31,7 @@ export const listUsersService: RouteHandler<typeof listUsersRoute, AppContext> =
     const db = c.get("db");
     const appUser = c.get("appUser");
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "member.read_private")) {
         return c.json({ message: "Forbidden" }, 403);
     }
 
