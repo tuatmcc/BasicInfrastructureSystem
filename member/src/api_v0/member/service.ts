@@ -1,3 +1,4 @@
+import { can } from "../../../../share/permissions";
 import type { Context } from 'hono'
 import type { RouteHandler } from '@hono/zod-openapi'
 import {
@@ -357,7 +358,6 @@ export const joinMemberService: RouteHandler<typeof joinMemberRoute, AppContext>
 
     const memberId = crypto.randomUUID()
     const created = await db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.current_member_id', ${memberId}, true)`)
       await tx.insert(members).values({
         ...application,
         memberId,
@@ -540,7 +540,7 @@ type DirectoryEntryRow = {
 export const getDirectoryService: RouteHandler<typeof getDirectoryRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (!appUser.memberId) {
+  if (!appUser.memberId || !can(appUser.permissions, 'member.read_public')) {
     return c.json({ error: 'Only active members may read the directory', code: 'active_member_required' }, 403)
   }
 
@@ -580,7 +580,7 @@ export const getDirectoryService: RouteHandler<typeof getDirectoryRoute, AppCont
 export const listAdminMembersService: RouteHandler<typeof listAdminMembersRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (appUser.role !== 'admin') {
+  if (!can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -633,7 +633,7 @@ export const listAdminMembersService: RouteHandler<typeof listAdminMembersRoute,
 export const getAdminMemberService: RouteHandler<typeof getAdminMemberRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (appUser.role !== 'admin') {
+  if (!can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -684,7 +684,7 @@ export const createApproveMemberService = (
 ): RouteHandler<typeof approveMemberRoute, AppContext> => async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (appUser.role !== 'admin') {
+  if (!can(appUser.permissions, "member.review") || !can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -824,7 +824,7 @@ const adminProfileKeys = [
 export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (appUser.role !== 'admin') {
+  if (!can(appUser.permissions, "member.edit") || !can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -933,7 +933,7 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
 export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (appUser.role !== 'admin') {
+  if (!can(appUser.permissions, "member.review") || !can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 

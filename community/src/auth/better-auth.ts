@@ -1,3 +1,4 @@
+import { can } from "../../../share/permissions";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import * as schema from "../../../share/drizzle/schema";
@@ -6,7 +7,7 @@ import { Context } from "hono";
 import { createRoute, z } from "@hono/zod-openapi";
 import { sign } from "hono/jwt";
 import { setCookie } from "hono/cookie";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getAuthDatabase, type AppDatabase } from "../core/db";
 
 export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
@@ -68,9 +69,9 @@ export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
 };
 
 export const getPostLoginRedirectPath = (
-    role: 'admin' | 'user',
+    permissions: readonly string[],
     memberStatus: string | null | undefined,
-) => role === 'admin' ? '/' : memberStatus === 'active' ? '/me' : '/join';
+) => can(permissions, 'event.manage') ? '/' : can(permissions, 'member.read_private') ? '/admin/members' : memberStatus === 'active' ? '/me' : '/join';
 
 // JWT Endpoint Route definition
 export const getJwtRoute = createRoute({
@@ -110,7 +111,7 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
 
     try {
         // Better Auth proved who the caller is; the domain decides what the JWT
-        // may claim, so role and membership are read from app_accounts.
+        // may do; authorization is resolved by the database, never embedded in the JWT.
         const authDb = getAuthDatabase(c);
 
         // The create hook normally provisions this row. Repairing it here costs
@@ -124,7 +125,7 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
 
         const [currentUser] = await authDb
             .select({
-                role: schema.appAccounts.role,
+                permissions: sql<string[]>`app_private.permissions_for(${schema.appAccounts.userId})`,
                 memberId: schema.appAccounts.memberId,
             })
             .from(schema.appAccounts)
@@ -136,12 +137,9 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             return c.redirect(`${frontendUrl}/login?error=user_not_found`);
         }
 
-        const role = currentUser.role === "admin" ? "admin" : "user";
         const db = c.get("db");
         db.setIdentity({
             userId: session.user.id,
-            memberId: currentUser.memberId,
-            role,
         });
 
         const memberId = currentUser.memberId;
@@ -156,7 +154,6 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             id: session.user.id,
             sid: session.session.id,
             name: session.user.name,
-            role,
             exp: Math.min(
                 Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
                 Math.floor(new Date(session.session.expiresAt).getTime() / 1000),
@@ -175,8 +172,8 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             domain: c.env.COOKIE_DOMAIN || undefined,
         });
 
-        const redirectPath = getPostLoginRedirectPath(role, member?.memberStatus);
-        console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id} with role ${payload.role}`);
+        const redirectPath = getPostLoginRedirectPath(currentUser.permissions, member?.memberStatus);
+        console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id}`);
         return c.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {
         console.error("[JWT Endpoint] Error generating JWT:", error);

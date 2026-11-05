@@ -1,3 +1,4 @@
+import { can } from "../../../../share/permissions";
 import { RouteHandler } from "@hono/zod-openapi"
 import { AppContext } from "../../core/types"
 import { CommunityProviderError } from "../../lib/community/error"
@@ -37,7 +38,7 @@ export const createMessageService: RouteHandler<typeof createMessageRoute, AppCo
     const community = c.get("community");
     const db = c.get("db");
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "event.manage")) {
         return c.json({ error: "Forbidden" }, 403);
     }
 
@@ -75,7 +76,7 @@ export const createMessageService: RouteHandler<typeof createMessageRoute, AppCo
 export const listMessagesService: RouteHandler<typeof listMessagesRoute, AppContext> = async (c) => {
     const appUser = c.get("appUser");
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "event.manage")) {
         return c.json({ error: "Forbidden" }, 403);
     }
 
@@ -90,7 +91,7 @@ export const listMessagesService: RouteHandler<typeof listMessagesRoute, AppCont
 export const getMessageService: RouteHandler<typeof getMessageRoute, AppContext> = async (c) => {
     const appUser = c.get("appUser");
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "event.manage")) {
         return c.json({ error: "Forbidden" }, 403);
     }
 
@@ -112,7 +113,7 @@ export const getMessageReactionsService: RouteHandler<typeof getMessageReactions
     const community = c.get("community");
     const db = c.get("db");
 
-    if (appUser.role !== "admin") {
+    if (!can(appUser.permissions, "reaction.read")) {
         return c.json({ error: "Forbidden" }, 403);
     }
 

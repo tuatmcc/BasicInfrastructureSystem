@@ -17,8 +17,6 @@ export type AppTransaction = NodePgTransaction<
 
 export type RlsIdentity = {
   userId: string
-  memberId: string | null
-  role: 'admin' | 'user' | ''
 }
 
 export type RlsDatabase = {
@@ -45,8 +43,6 @@ export const assertSafeRuntimeRole = (probe: RuntimeRoleProbe) => {
 
 const anonymousIdentity: RlsIdentity = {
   userId: '',
-  memberId: null,
-  role: '',
 }
 
 export const createRlsDatabase = (database: AppDatabase): RlsDatabase => {
@@ -71,8 +67,6 @@ export const createRlsDatabase = (database: AppDatabase): RlsDatabase => {
         await tx.execute(sql`
           select
             set_config('app.current_user_id', ${transactionIdentity.userId}, true),
-            set_config('app.current_member_id', ${transactionIdentity.memberId ?? ''}, true),
-            set_config('app.current_user_role', ${transactionIdentity.role}, true),
             set_config('statement_timeout', '15000', true),
             set_config('lock_timeout', '5000', true),
             set_config('idle_in_transaction_session_timeout', '5000', true)

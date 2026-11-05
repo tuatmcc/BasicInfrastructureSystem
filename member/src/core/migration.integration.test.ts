@@ -837,3 +837,52 @@ test('every permission the code checks exists in the database', async () => {
     await client.close()
   }
 })
+
+// U-3 exercises the real migration under app_rls, independently of API stubs.
+test('database permissions replace role claims and keep independent grants independent', async () => {
+  const client = await PGlite.create()
+  const adminId = '00000000-0000-4000-8000-000000000401'
+  const memberId = '00000000-0000-4000-8000-000000000402'
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'permission-admin', memberId: adminId })
+    await promoteToAdmin(client, 'permission-admin')
+    await approveMember(client, 'permission-admin', adminId)
+    await applyAsNewUser(client, { userId: 'permission-member', memberId })
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await readFile(resolve(dirname(roleTablesMigrationPath), '20261105072955_enforce_permissions.sql'), 'utf8'))
+    const obsolete = await client.query(`select column_name from information_schema.columns where table_name = 'app_accounts' and column_name = 'role'`)
+    assert.equal(obsolete.rows.length, 0)
+    const policies = await client.query<{ qual: string; with_check: string }>(`select qual, with_check from pg_policies where schemaname in ('public', 'app_auth')`)
+    assert.doesNotMatch(JSON.stringify(policies.rows), /current_user_role|current_member_id',/)
+    await client.exec(`
+      insert into public.app_roles(role_key, display_name) values ('reviewer', 'Reviewer'), ('events', 'Events');
+      insert into public.role_permissions values ('reviewer', 'member.review', now()), ('reviewer', 'member.read_private', now()), ('events', 'event.manage', now());
+      set role app_rls;
+      select set_config('app.current_user_id', 'permission-member', false),
+             set_config('app.current_user_role', 'admin', false),
+             set_config('app.current_member_id', '${adminId}', false);
+    `)
+    const own = await client.query<{ member_id: string }>('select member_id from public.members')
+    assert.deepEqual(own.rows, [{ member_id: memberId }])
+    await assert.rejects(client.exec(`insert into public.member_roles values ('${memberId}', 'admin', 'permission-member', now())`), /row-level security/)
+    await assert.rejects(client.exec(`insert into public.grades(code, display_grade, sort_order) values ('FAKE', 'Fake', 999)`), /permission denied/)
+    await client.exec(`delete from public.member_roles where member_id = '${adminId}'`)
+    await client.exec(`reset role;`)
+    const survived = await client.query<{ n: number }>(`select count(*)::int as n from member_roles where member_id = '${adminId}' and role_key = 'admin'`)
+    assert.equal(survived.rows[0].n, 1)
+    await client.exec(`insert into member_roles values ('${memberId}', 'events', 'test', now()); set role app_rls;`)
+    const limited = await client.query<{ permissions: string[] }>(`select app_private.permissions_for('permission-member') as permissions`)
+    assert.deepEqual(limited.rows[0].permissions, ['event.manage'])
+    assert.equal((await client.query(`select * from public.members`)).rows.length, 1)
+    await client.exec(`reset role; insert into member_roles values ('${memberId}', 'reviewer', 'test', now()); set role app_rls;`)
+    await assert.rejects(client.exec(`update members set registered_name = 'forged', application_version = application_version + 1 where member_id = '${adminId}'`), /member.edit is required/)
+    await client.exec(`select set_config('app.current_user_id', 'permission-admin', false), set_config('app.current_user_role', '', false)`)
+    await client.exec(`update members set member_status = 'active', reviewed_at = now(), reviewed_by_user_id = 'permission-admin', application_version = application_version + 1 where member_id = '${memberId}'`)
+    const approved = await client.query<{ allowed: boolean }>(`select app_private.has_permission('permission-member', 'member.read_public') as allowed`)
+    assert.equal(approved.rows[0].allowed, true)
+    await client.exec(`delete from member_roles where member_id = '${memberId}' and role_key = 'events'`)
+    const revoked = await client.query<{ allowed: boolean }>(`select app_private.has_permission('permission-member', 'event.manage') as allowed`)
+    assert.equal(revoked.rows[0].allowed, false)
+  } finally { await client.close() }
+})

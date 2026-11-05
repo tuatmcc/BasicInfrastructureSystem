@@ -61,10 +61,10 @@ test("Better Auth signs members in with Discord as the only provider", async () 
 });
 
 test("post-login routing only sends active members to their profile", () => {
-    assert.equal(getPostLoginRedirectPath("admin", null), "/");
-    assert.equal(getPostLoginRedirectPath("user", "active"), "/me");
-    assert.equal(getPostLoginRedirectPath("user", "pending"), "/join");
-    assert.equal(getPostLoginRedirectPath("user", "rejected"), "/join");
-    assert.equal(getPostLoginRedirectPath("user", "withdrawn"), "/join");
-    assert.equal(getPostLoginRedirectPath("user", null), "/join");
+    assert.equal(getPostLoginRedirectPath(["event.manage"], null), "/");
+    assert.equal(getPostLoginRedirectPath([], "active"), "/me");
+    assert.equal(getPostLoginRedirectPath([], "pending"), "/join");
+    assert.equal(getPostLoginRedirectPath([], "rejected"), "/join");
+    assert.equal(getPostLoginRedirectPath([], "withdrawn"), "/join");
+    assert.equal(getPostLoginRedirectPath([], null), "/join");
 });

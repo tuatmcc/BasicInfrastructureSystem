@@ -8,7 +8,6 @@ const appUser = {
   id: 'user-1',
   name: 'Test User',
   memberId: null,
-  role: 'user' as const,
 };
 const linkedAccount = {
   id: 'account-row-1',

@@ -92,7 +92,6 @@ export const verification = appAuth.table("verification", {
 export const appAccounts = pgTable("app_accounts", {
 	userId: text("user_id").primaryKey(),
 	memberId: uuid("member_id"),
-	role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (table) => [
@@ -102,7 +101,6 @@ export const appAccounts = pgTable("app_accounts", {
 		name: "app_accounts_member_id_fkey",
 	}).onDelete("set null"),
 	unique("app_accounts_member_id_key").on(table.memberId),
-	check("app_accounts_role_valid", sql`${table.role} in ('user', 'admin')`),
 	check("app_accounts_user_id_not_blank", sql`btrim(${table.userId}) <> ''`),
 	index("app_accounts_member_id_idx").on(table.memberId),
 ])
