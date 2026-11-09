@@ -13,29 +13,28 @@ export type appUser = {
   name: string
   memberId: string | null
   /**
-   * What this caller may do, resolved through the roles their member holds.
-   * Ask with `can()` from share/permissions; never branch on a role name.
+   * この呼び出し元ができること。部員が持つロールからたどって求めた権限の一覧。
+   * 判定には share/permissions の `can()` を使い、ロール名で分岐しない。
    */
   permissions: readonly string[]
 }
 
-
-// Who the caller is, according to the authentication store.
+// 認証ストアから見た「呼び出し元が誰か」。
 const subjectSelection = {
   id: user.id,
   name: user.name,
 }
 
-// Resolve permissions through the same database function used by RLS.
+// 権限は、RLS と同じデータベース関数（app_private.permissions_for）で求める。
 const accountSelection = {
   memberId: appAccounts.memberId,
   permissions: sql<string[]>`app_private.permissions_for(${appAccounts.userId})`,
 }
 
-// This is the boundary between the authentication store and the domain, and the
-// only place that reads both. The two lookups stay separate rather than joining
-// across app_auth and public, so moving the authentication store to its own
-// database turns the first one into a remote call and leaves the second alone.
+// 認証ストアとドメインの境目。両方を読むのはここだけ。
+// 2 つの検索は app_auth と public をまたいで結合せず、別々に行う。
+// 認証ストアを別のデータベースへ移したとき、1 つ目だけを外部への問い合わせに
+// 置き換えれば済むようにするため。
 const loadAppUser = async (
   c: Context<AppContext>,
   userId: string,
@@ -87,10 +86,9 @@ const loadAppUser = async (
   return resolved;
 }
 
-// The development bypass skips token verification entirely, so reaching it on a
-// deployed Worker would leave the API open. NODE_ENV is an ordinary variable
-// that a misconfigured deployment can carry, but the hostname the request
-// actually arrived on is not, so both must agree before the bypass applies.
+// 開発用の抜け道はトークンの検証を丸ごと飛ばすので、デプロイ先で有効になると
+// API を誰でも使えてしまう。NODE_ENV は設定ミスで本番にも入り得るただの変数だが、
+// リクエストが実際に届いたホスト名はそうではない。両方がそろったときだけ抜け道を使う。
 const isLocalRequest = (c: Context<AppContext>) => {
   try {
     const hostname = new URL(c.req.url).hostname
@@ -108,7 +106,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
   let sessionId: string | undefined;
 
   if (c.env.NODE_ENV === 'development' && isLocalRequest(c)) {
-    // For development purposes, resolve the mock user's latest database state.
+    // 開発用：データベースにあるモックユーザーの最新の状態を読み込む。
     const developmentUserId = c.env.DEV_USER_ID?.trim();
     if (!developmentUserId) {
       return c.json({ error: 'Development authentication requires DEV_USER_ID' }, 500);
