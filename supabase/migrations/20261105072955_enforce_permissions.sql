@@ -53,118 +53,73 @@ drop policy if exists grades_write_admin on public.grades;
 drop policy member_roles_insert_admin on public.member_roles;
 drop policy member_roles_delete_admin on public.member_roles;
 
+-- RLS の範囲（docs/aidlc/components.md 3.6、2026-11-09 決定）
+--
+-- 原則 1：RLS は API より必ず緩くする。API が許す操作を RLS が拒むことはない。
+--         （拒まれた行は黙って消えるので、食い違うと「0 件」に見えて原因が分かりにくい）
+-- 原則 2：RLS が止めるのは、どの API でも起きてはならない次の 2 つだけ。
+--         - 他人の個人情報が、部員を管理する権限のない人に渡ること
+--         - 権限が勝手に広がること
+-- それ以外の判定は API が行う。
+
+-- 部員を管理する権限（3 つのうちどれか）を持つか。個人情報を守る表で共通に使う。
+create function app_private.is_member_manager()
+returns boolean language sql stable security invoker
+set search_path = pg_catalog, public
+as $$
+  select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private')
+      or app_private.has_permission(current_setting('app.current_user_id', true), 'member.review')
+      or app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')
+$$;
+
+revoke all on function app_private.is_member_manager() from public;
+grant execute on function app_private.is_member_manager() to app_rls;
+
+-- 個人情報を守る表：本人か、部員を管理する権限を持つ人だけ
 create policy members_read on public.members
   for select to app_rls
-  using (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private')));
+  using (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()));
 
+-- 入部申請は、まだ部員と結び付いていないアカウントの本人が出す
 create policy members_apply on public.members
   for insert to app_rls
-  with check ((select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')) or exists (select 1 from public.app_accounts where user_id = current_setting('app.current_user_id', true) and member_id is null));
+  with check (
+    (select app_private.is_member_manager())
+    or exists (
+      select 1 from public.app_accounts
+      where user_id = current_setting('app.current_user_id', true) and member_id is null
+    )
+  );
 
 create policy members_write on public.members
   for update to app_rls
-  using (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')))
-  with check (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
+  using (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()))
+  with check (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()));
 
 create policy members_delete on public.members
   for delete to app_rls
-  using ((select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
+  using ((select app_private.is_member_manager()));
 
 -- Grade data remains migration-managed; app_rls has SELECT privileges only.
 
 create policy profiles_read on public.member_directory_profiles
   for select to app_rls
-  using (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private')));
+  using (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()));
 
 create policy profiles_insert on public.member_directory_profiles
   for insert to app_rls
-  with check ((select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
+  with check ((select app_private.is_member_manager()));
 
 create policy profiles_update on public.member_directory_profiles
   for update to app_rls
-  using (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')))
-  with check (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
+  using (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()))
+  with check (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()));
 
 create policy history_read on public.member_status_history
   for select to app_rls
-  using (member_id = (select app_private.current_member_id())
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private')));
+  using (member_id = (select app_private.current_member_id()) or (select app_private.is_member_manager()));
 
-create policy community_identities_read on public.community_identities
-  for select to app_rls
-  using (user_id = (select current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'reaction.read')));
-
-create policy community_identities_insert on public.community_identities
-  for insert to app_rls
-  with check (user_id = (select current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
-
-create policy community_identities_update on public.community_identities
-  for update to app_rls
-  using (user_id = (select current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')))
-  with check (user_id = (select current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
-
-create policy community_memberships_read on public.community_memberships
-  for select to app_rls
-  using (exists (select 1 from public.community_identities i where i.identity_id = community_memberships.identity_id and i.user_id = current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.read_private'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'reaction.read')));
-
-create policy community_memberships_insert on public.community_memberships
-  for insert to app_rls
-  with check (exists (select 1 from public.community_identities i where i.identity_id = community_memberships.identity_id and i.user_id = current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
-
-create policy community_memberships_update on public.community_memberships
-  for update to app_rls
-  using (exists (select 1 from public.community_identities i where i.identity_id = community_memberships.identity_id and i.user_id = current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')))
-  with check (exists (select 1 from public.community_identities i where i.identity_id = community_memberships.identity_id and i.user_id = current_setting('app.current_user_id', true))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.review'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'member.edit')));
-
-create policy events_read on public.event_messages
-  for select to app_rls
-  using ((select app_private.has_permission(current_setting('app.current_user_id', true), 'event.manage'))
-    or (select app_private.has_permission(current_setting('app.current_user_id', true), 'reaction.read')));
-
-create policy events_insert on public.event_messages
-  for insert to app_rls
-  with check ((select app_private.has_permission(current_setting('app.current_user_id', true), 'event.manage')));
-
-create policy events_update on public.event_messages
-  for update to app_rls
-  using ((select app_private.has_permission(current_setting('app.current_user_id', true), 'event.manage')))
-  with check ((select app_private.has_permission(current_setting('app.current_user_id', true), 'event.manage')));
-
-create policy events_delete on public.event_messages
-  for delete to app_rls
-  using ((select app_private.has_permission(current_setting('app.current_user_id', true), 'event.manage')));
-
+-- 権限を広げる書き込み：ロールの付与と剥奪は role.manage を持つ人だけ
 create policy member_roles_grant on public.member_roles
   for insert to app_rls
   with check ((select app_private.has_permission(current_setting('app.current_user_id', true), 'role.manage')));
@@ -172,6 +127,63 @@ create policy member_roles_grant on public.member_roles
 create policy member_roles_revoke on public.member_roles
   for delete to app_rls
   using ((select app_private.has_permission(current_setting('app.current_user_id', true), 'role.manage')));
+
+-- 権限を広げる書き込み：アカウントと部員の結び付け（app_accounts.member_id）
+-- 結び付けた部員のロールがそのまま権限になるので、他人の部員に付け替えられると権限が広がる。
+-- ポリシーでは変更前の値を見られないので、トリガーで確かめる。
+-- 許すのは次の 3 つだけ。
+--   - 結び付けを外す（権限は狭まるだけ）
+--   - 本人が、まだ空の自分のアカウントを、ロールを 1 つも持たない部員に結び付ける（入部申請）
+--     ロールを持つ部員に結び付けられると、そのロールの権限をそのまま得てしまうため
+--   - 部員を管理する権限を持つ人が結び付ける（入部の承認）
+-- migration や運用手順（runbook）はアプリの接続ユーザー（app_rls）で動かないので対象外。
+create function app_private.guard_member_link()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if current_user <> 'app_rls' then
+    return new;
+  end if;
+
+  if new.member_id is null then
+    return new;
+  end if;
+
+  if old.member_id is null
+     and new.user_id = nullif(current_setting('app.current_user_id', true), '')
+     and not exists (select 1 from public.member_roles where member_id = new.member_id) then
+    return new;
+  end if;
+
+  if app_private.is_member_manager() then
+    return new;
+  end if;
+
+  raise exception using
+    errcode = '42501',
+    message = 'only the account owner or a member manager may link an account to a member';
+end;
+$$;
+
+revoke all on function app_private.guard_member_link() from public;
+
+create trigger app_accounts_guard_member_link
+  before update of member_id on public.app_accounts
+  for each row
+  when (old.member_id is distinct from new.member_id)
+  execute function app_private.guard_member_link();
+
+-- 残りの表は RLS では守らず、アプリの接続ユーザーにすべて許す。判定は API が行う。
+create policy community_identities_app on public.community_identities
+  for all to app_rls using (true) with check (true);
+
+create policy community_memberships_app on public.community_memberships
+  for all to app_rls using (true) with check (true);
+
+create policy event_messages_app on public.event_messages
+  for all to app_rls using (true) with check (true);
 
 create or replace function app_private.enforce_member_workflow()
 returns trigger
