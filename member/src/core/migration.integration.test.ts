@@ -1022,6 +1022,13 @@ test('RLS は API より緩く、個人情報の流出と権限の拡大だけ�
       /only the account owner or a member manager/,
       'ロールを持つ部員に、自分を結び付けられない',
     )
+    await client.query(`select set_config('app.current_user_id', 'rls-newcomer', false)`)
+    await assert.rejects(
+      client.exec(`insert into public.app_accounts (user_id, member_id) values ('rls-newcomer', '${id(606)}')`),
+      /only the account owner or a member manager/,
+      'ロールを持つ部員に結び付いたアカウントを、新しく追加できない',
+    )
+    await client.query(`select set_config('app.current_user_id', 'rls-outsider', false)`)
     await client.exec(`update public.app_accounts set member_id = '${id(607)}' where user_id = 'rls-outsider'`)
     const linked = await client.query<{ member_id: string }>(`select member_id from public.app_accounts where user_id = 'rls-outsider'`)
     assert.equal(linked.rows[0].member_id, id(607), 'ロールのない部員には、本人が結び付けられる（入部申請）')

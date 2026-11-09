@@ -142,6 +142,9 @@ returns trigger
 language plpgsql
 set search_path = pg_catalog, public
 as $$
+declare
+  -- 行を追加するときは「まだ結び付いていない」状態から始まるとみなす。
+  was_linked boolean := false;
 begin
   if current_user <> 'app_rls' then
     return new;
@@ -151,7 +154,11 @@ begin
     return new;
   end if;
 
-  if old.member_id is null
+  if tg_op = 'UPDATE' then
+    was_linked := old.member_id is not null;
+  end if;
+
+  if not was_linked
      and new.user_id = nullif(current_setting('app.current_user_id', true), '')
      and not exists (select 1 from public.member_roles where member_id = new.member_id) then
     return new;
@@ -169,10 +176,17 @@ $$;
 
 revoke all on function app_private.guard_member_link() from public;
 
+-- 結び付けを変える更新と、最初から結び付いた行の追加の両方を確かめる。
 create trigger app_accounts_guard_member_link
   before update of member_id on public.app_accounts
   for each row
   when (old.member_id is distinct from new.member_id)
+  execute function app_private.guard_member_link();
+
+create trigger app_accounts_guard_member_link_on_insert
+  before insert on public.app_accounts
+  for each row
+  when (new.member_id is not null)
   execute function app_private.guard_member_link();
 
 -- 残りの表は RLS では守らず、アプリの接続ユーザーにすべて許す。判定は API が行う。
@@ -360,8 +374,6 @@ grant select on app_api.member_directory_entries to app_rls;
 
 comment on view app_api.member_directory_entries is
   'Allowlisted active-member directory; intentionally excludes all private member fields.';
-
-commit;
 
 -- Fixed base grant on approval, not a user-controlled grant path (FR-4.3).
 create function app_private.grant_base_member_role()
