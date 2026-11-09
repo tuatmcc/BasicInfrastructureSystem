@@ -39,7 +39,7 @@ const applicant: appUser = {
   id: 'test-applicant',
   name: 'Applicant',
   memberId: null,
-  role: 'user',
+
   // Not a member yet, so no role grants it anything.
   permissions: [],
 }
@@ -48,7 +48,7 @@ const admin: appUser = {
   id: 'test-admin',
   name: 'Admin',
   memberId: null,
-  role: 'admin',
+
   permissions: [...CHECKED_PERMISSIONS],
 }
 
@@ -73,8 +73,7 @@ const createContext = (
           await tx.execute(sql`
             select
               set_config('app.current_user_id', ${currentUser.id}, true),
-              set_config('app.current_member_id', ${currentUser.memberId ?? ''}, true),
-              set_config('app.current_user_role', ${currentUser.role}, true)
+              set_config('statement_timeout', '15000', true)
           `)
           return operation(tx)
         })
@@ -171,7 +170,6 @@ const setupWorkflowDatabase = async () => {
     create table app_accounts (
       user_id text primary key,
       member_id uuid unique references members(member_id),
-      role text not null default 'user',
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
@@ -249,9 +247,18 @@ const setupWorkflowDatabase = async () => {
     insert into app_auth."user"(id, name, email, email_verified, created_at, updated_at) values
       ('test-admin', 'Admin', 'admin@example.test', true, now(), now()),
       ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now());
-    insert into app_accounts(user_id, role) values
-      ('test-admin', 'admin'),
-      ('test-applicant', 'user');
+    insert into app_accounts(user_id) values ('test-admin'), ('test-applicant');
+    create schema app_private;
+    create table test_permissions(user_id text, permission_key text);
+    insert into test_permissions select 'test-admin', unnest(array['member.read_private','member.review','member.edit','role.manage','event.manage']);
+    grant usage on schema app_private to app_rls;
+    grant select on test_permissions to app_rls;
+    create function app_private.permissions_for(subject_id text) returns text[] language sql as $fn$
+      select coalesce(array_agg(permission_key), array[]::text[]) from test_permissions where user_id = subject_id
+    $fn$;
+    create function app_private.current_member_id() returns uuid language sql as $fn$
+      select member_id from app_accounts where user_id = current_setting('app.current_user_id', true)
+    $fn$;
     insert into account(id, account_id, provider_id, user_id, created_at, updated_at) values
       ('discord-account', 'discord-user-1', 'discord', 'test-applicant', now(), now());
     insert into community_identities(
@@ -322,51 +329,51 @@ const setupWorkflowDatabase = async () => {
     create policy accounts_all on app_accounts for all to app_rls using (true) with check (true);
     create policy account_read on account for select to app_rls using (true);
     create policy members_read on members for select to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     );
     create policy members_insert on members for insert to app_rls with check (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or exists (select 1 from app_accounts where user_id = current_setting('app.current_user_id', true) and member_id is null)
     );
     create policy members_update on members for update to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     ) with check (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     );
     create policy profiles_read on member_directory_profiles for select to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     );
     create policy profiles_insert on member_directory_profiles for insert to app_rls with check (
-      current_setting('app.current_user_role', true) = 'admin'
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
     );
     create policy profiles_update on member_directory_profiles for update to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     ) with check (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     );
     create policy identities_read on community_identities for select to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
       or user_id = current_setting('app.current_user_id', true)
     );
     create policy identities_update on community_identities for update to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-    ) with check (current_setting('app.current_user_role', true) = 'admin');
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+    ) with check ('member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true))));
     create policy memberships_read on community_memberships for select to app_rls using (true);
     create policy memberships_insert on community_memberships for insert to app_rls with check (
-      current_setting('app.current_user_role', true) = 'admin'
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
     );
     create policy memberships_update on community_memberships for update to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-    ) with check (current_setting('app.current_user_role', true) = 'admin');
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+    ) with check ('member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true))));
     create policy history_read on member_status_history for select to app_rls using (
-      current_setting('app.current_user_role', true) = 'admin'
-      or member_id = nullif(current_setting('app.current_member_id', true), '')::uuid
+      'member.edit' = any(app_private.permissions_for(current_setting('app.current_user_id', true)))
+      or member_id = app_private.current_member_id()
     );
   `)
   return { client, db: drizzle(client) }
@@ -521,7 +528,7 @@ test('membership application uses one versioned row through reject, resubmit, ap
     assert.equal((selfUpdated.body as { name: string }).name, '再申請 本人')
     assert.equal((selfUpdated.body as { directoryProfile: { displayName: string } }).directoryProfile.displayName, '公開名')
 
-    const directoryContext = createContext(db, linkedApplicant)
+    const directoryContext = createContext(db, { ...linkedApplicant, permissions: ['member.read_public'] })
     const directory = asResponse(await callHandler(getDirectoryService, directoryContext.context as never))
     assert.equal(directory.status, 200)
     const directoryRow = (directory.body as Array<Record<string, unknown>>)[0]
@@ -760,8 +767,7 @@ test('development auth reloads memberId and downstream failures remain server er
       );
       create table app_accounts (
         user_id text primary key,
-        member_id uuid references members(member_id),
-        role text default 'user' not null
+        member_id uuid references members(member_id)
       );
       create table app_auth.session (
         id text primary key,
@@ -780,9 +786,16 @@ test('development auth reloads memberId and downstream failures remain server er
         role_key text not null references app_roles(role_key),
         primary key (member_id, role_key)
       );
+      create schema app_private;
+      grant usage on schema app_private to app_rls;
+      create function app_private.permissions_for(subject_id text) returns text[] language sql as $fn$
+        select coalesce(array_agg(distinct rp.permission_key), array[]::text[])
+        from app_accounts a join member_roles mr on mr.member_id = a.member_id
+        join role_permissions rp on rp.role_key = mr.role_key where a.user_id = subject_id
+      $fn$;
       insert into members values ('${memberId}');
       insert into app_auth."user" values ('user-1', 'test-user');
-      insert into app_accounts values ('user-1', '${memberId}', 'user');
+      insert into app_accounts values ('user-1', '${memberId}');
       insert into app_auth.session values ('session-1', 'user-1', now() + interval '1 hour');
       grant app_rls to current_user;
       grant usage on schema app_auth to app_rls;
@@ -830,5 +843,19 @@ test('development auth reloads memberId and downstream failures remain server er
     assert.equal(deployed.status, 401)
   } finally {
     await client.close()
+  }
+})
+
+test('membership mutations cannot return private details without the read permission', async () => {
+  for (const handler of [createApproveMemberService(), rejectMemberService, updateAdminMemberService]) {
+    const response = asResponse(await callHandler(handler, {
+      get: (key: string) => {
+        assert.equal(key, 'appUser', 'permission rejection must precede database access')
+        return { ...applicant, permissions: ['member.review', 'member.edit'] }
+      },
+      header: () => {},
+      json: (body: unknown, status: number) => ({ body, status }),
+    }))
+    assert.equal(response.status, 403)
   }
 })

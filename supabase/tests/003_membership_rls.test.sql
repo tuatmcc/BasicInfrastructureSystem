@@ -19,15 +19,22 @@ insert into app_auth."user" (
   ('test-applicant', 'Applicant', 'applicant@example.test', true, now(), now()),
   ('test-viewer', 'Viewer', 'viewer@example.test', true, now(), now());
 
-insert into public.app_accounts (user_id, role) values
-  ('test-admin', 'admin'),
-  ('test-applicant', 'user'),
-  ('test-viewer', 'user');
+insert into public.app_accounts (user_id) values
+  ('test-admin'),
+  ('test-applicant'),
+  ('test-viewer');
+
+reset role;
+select set_config('app.current_user_id', 'test-admin', true);
+insert into public.members(member_id, registered_name, grade_id, emergency_contact, student_id, student_email)
+values ('00000000-0000-4000-8000-00000000000a', 'Bootstrap', 1, 'contact', 'BOOTSTRAP', 'bootstrap@student.example');
+update public.app_accounts set member_id = '00000000-0000-4000-8000-00000000000a' where user_id = 'test-admin';
+insert into public.member_roles(member_id, role_key, granted_by_user_id)
+values ('00000000-0000-4000-8000-00000000000a', 'admin', 'test-bootstrap');
+set local role app_rls;
 
 select
-  set_config('app.current_user_id', 'test-admin', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', 'admin', true);
+  set_config('app.current_user_id', 'test-admin', true);
 
 select lives_ok(
   $$
@@ -84,9 +91,7 @@ select lives_ok(
 );
 
 select
-  set_config('app.current_user_id', 'test-applicant', true),
-  set_config('app.current_member_id', '00000000-0000-4000-8000-000000000001', true),
-  set_config('app.current_user_role', 'user', true);
+  set_config('app.current_user_id', 'test-applicant', true);
 
 select throws_ok(
   $$
@@ -177,14 +182,12 @@ select throws_ok(
     where member_id = '00000000-0000-4000-8000-000000000001'
   $$,
   '23514',
-  'only an admin may approve or reject a pending application with consistent review metadata',
+  'member.review is required to approve or reject a pending application with consistent review metadata',
   'a regular app_rls actor cannot approve their own pending application'
 );
 
 select
-  set_config('app.current_user_id', 'test-admin', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', 'admin', true);
+  set_config('app.current_user_id', 'test-admin', true);
 
 select throws_ok(
   $$
@@ -223,9 +226,7 @@ select throws_ok(
 );
 
 select
-  set_config('app.current_user_id', 'test-applicant', true),
-  set_config('app.current_member_id', '00000000-0000-4000-8000-000000000001', true),
-  set_config('app.current_user_role', 'user', true);
+  set_config('app.current_user_id', 'test-applicant', true);
 
 select results_eq(
   $$select count(*) from app_api.member_directory_entries$$,
@@ -235,8 +236,6 @@ select results_eq(
 
 select
   set_config('app.current_user_id', 'test-admin', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', 'admin', true),
   set_config('app.member_status_reason', 'approved in database test', true);
 
 select lives_ok(
@@ -285,9 +284,7 @@ select results_eq(
 );
 
 select
-  set_config('app.current_user_id', 'test-viewer', true),
-  set_config('app.current_member_id', '00000000-0000-4000-8000-000000000002', true),
-  set_config('app.current_user_role', 'user', true);
+  set_config('app.current_user_id', 'test-viewer', true);
 
 select results_eq(
   $$select count(*) from app_api.member_directory_entries$$,
@@ -329,9 +326,7 @@ select throws_ok(
 );
 
 select
-  set_config('app.current_user_id', 'test-admin', true),
-  set_config('app.current_member_id', '', true),
-  set_config('app.current_user_role', 'admin', true);
+  set_config('app.current_user_id', 'test-admin', true);
 
 -- The reviewer used to be protected by a foreign key. That key crossed into the
 -- authentication store and had to go, so the reviewer is now a snapshot:

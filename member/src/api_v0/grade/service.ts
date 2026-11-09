@@ -1,3 +1,4 @@
+import { can } from "../../../../share/permissions";
 import { AppContext } from "../../core/types"
 import { RouteHandler } from "@hono/zod-openapi"
 import {
@@ -10,7 +11,7 @@ import { grades } from "../../../../share/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 export const createGradesService: RouteHandler<typeof createGradeRoute, AppContext> = async (c) => {
-    if ("admin" !== c.get("appUser").role) {
+    if (!can(c.get("appUser").permissions, "member.edit")) {
         return c.json(null, 403)
     }
 
@@ -28,7 +29,7 @@ export const getGradesService: RouteHandler<typeof getGradesRoute, AppContext> =
 };
 
 export const updateGradesService: RouteHandler<typeof updateGradesRoute, AppContext> = async (c) => {
-    if ("admin" !== c.get("appUser").role) {
+    if (!can(c.get("appUser").permissions, "member.edit")) {
         return c.json(null, 403)
     }
 
@@ -49,7 +50,7 @@ export const updateGradesService: RouteHandler<typeof updateGradesRoute, AppCont
 };
 
 export const deleteGradeService: RouteHandler<typeof deleteGradeRoute, AppContext> = async (c) => {
-    if ("admin" !== c.get("appUser").role) {
+    if (!can(c.get("appUser").permissions, "member.edit")) {
         return c.json(null, 403)
     }
 

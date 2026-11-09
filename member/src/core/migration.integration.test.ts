@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
+import { drizzle } from 'drizzle-orm/pglite'
 import { CHECKED_PERMISSIONS } from '../../../share/permissions'
+import { findPermissions } from './permissions'
 
 const migrationPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -833,6 +835,203 @@ test('every permission the code checks exists in the database', async () => {
       [],
       'these permission names appear in the code but not in the database',
     )
+  } finally {
+    await client.close()
+  }
+})
+
+// U-3 exercises the real migration under app_rls, independently of API stubs.
+test('database permissions replace role claims and keep independent grants independent', async () => {
+  const client = await PGlite.create()
+  const adminId = '00000000-0000-4000-8000-000000000401'
+  const memberId = '00000000-0000-4000-8000-000000000402'
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'permission-admin', memberId: adminId })
+    await promoteToAdmin(client, 'permission-admin')
+    await approveMember(client, 'permission-admin', adminId)
+    await applyAsNewUser(client, { userId: 'permission-member', memberId })
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await readFile(resolve(dirname(roleTablesMigrationPath), '20261105072955_enforce_permissions.sql'), 'utf8'))
+    const obsolete = await client.query(`select column_name from information_schema.columns where table_name = 'app_accounts' and column_name = 'role'`)
+    assert.equal(obsolete.rows.length, 0)
+    const policies = await client.query<{ qual: string; with_check: string }>(`select qual, with_check from pg_policies where schemaname in ('public', 'app_auth')`)
+    assert.doesNotMatch(JSON.stringify(policies.rows), /current_user_role|current_member_id',/)
+    await client.exec(`
+      insert into public.app_roles(role_key, display_name) values ('reviewer', 'Reviewer'), ('events', 'Events');
+      insert into public.role_permissions values ('reviewer', 'member.review', now()), ('reviewer', 'member.read_private', now()), ('events', 'event.manage', now());
+      set role app_rls;
+      select set_config('app.current_user_id', 'permission-member', false),
+             set_config('app.current_user_role', 'admin', false),
+             set_config('app.current_member_id', '${adminId}', false);
+    `)
+    const own = await client.query<{ member_id: string }>('select member_id from public.members')
+    assert.deepEqual(own.rows, [{ member_id: memberId }])
+    await assert.rejects(client.exec(`insert into public.member_roles values ('${memberId}', 'admin', 'permission-member', now())`), /row-level security/)
+    await assert.rejects(client.exec(`insert into public.grades(code, display_grade, sort_order) values ('FAKE', 'Fake', 999)`), /permission denied/)
+    await client.exec(`delete from public.member_roles where member_id = '${adminId}'`)
+    await client.exec(`reset role;`)
+    const survived = await client.query<{ n: number }>(`select count(*)::int as n from member_roles where member_id = '${adminId}' and role_key = 'admin'`)
+    assert.equal(survived.rows[0].n, 1)
+    await client.exec(`insert into member_roles values ('${memberId}', 'events', 'test', now()); set role app_rls;`)
+    const limited = await client.query<{ permissions: string[] }>(`select app_private.permissions_for('permission-member') as permissions`)
+    assert.deepEqual(limited.rows[0].permissions, ['event.manage'])
+    assert.equal((await client.query(`select * from public.members`)).rows.length, 1)
+    await client.exec(`reset role; insert into member_roles values ('${memberId}', 'reviewer', 'test', now()); set role app_rls;`)
+    await assert.rejects(client.exec(`update members set registered_name = 'forged', application_version = application_version + 1 where member_id = '${adminId}'`), /member.edit is required/)
+    await client.exec(`select set_config('app.current_user_id', 'permission-admin', false), set_config('app.current_user_role', '', false)`)
+    await client.exec(`update members set member_status = 'active', reviewed_at = now(), reviewed_by_user_id = 'permission-admin', application_version = application_version + 1 where member_id = '${memberId}'`)
+    const approved = await client.query<{ allowed: boolean }>(`select app_private.has_permission('permission-member', 'member.read_public') as allowed`)
+    assert.equal(approved.rows[0].allowed, true)
+    await client.exec(`delete from member_roles where member_id = '${memberId}' and role_key = 'events'`)
+    const revoked = await client.query<{ allowed: boolean }>(`select app_private.has_permission('permission-member', 'event.manage') as allowed`)
+    assert.equal(revoked.rows[0].allowed, false)
+  } finally { await client.close() }
+})
+
+// API（findPermissions）と RLS（app_private.permissions_for）は、同じたどり方で権限を求める。
+// 片方だけ変えると答えが食い違うので、立場の違う 3 人について一致を確かめる。
+// 認証処理は呼び出し元が決まる前に権限を読むので、app.current_user_id が空の状態で読む。
+test('API と RLS は同じ権限を求める', async () => {
+  const client = await PGlite.create()
+  const adminId = '00000000-0000-4000-8000-000000000501'
+  const memberId = '00000000-0000-4000-8000-000000000502'
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'same-admin', memberId: adminId })
+    await promoteToAdmin(client, 'same-admin')
+    await approveMember(client, 'same-admin', adminId)
+    await applyAsNewUser(client, { userId: 'same-member', memberId })
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await readFile(resolve(dirname(roleTablesMigrationPath), '20261105072955_enforce_permissions.sql'), 'utf8'))
+
+    // same-member には、同じ権限（member.review）を含む 2 つのロールを付ける。
+    // same-outsider はログインしただけで、部員の行がない。
+    await client.exec(`
+      insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
+      values ('same-outsider', 'same-outsider', 'same-outsider@example.test', true, now(), now());
+      insert into public.app_accounts (user_id) values ('same-outsider');
+      insert into public.app_roles (role_key, display_name) values ('reviewer', 'Reviewer'), ('lead', 'Lead');
+      insert into public.role_permissions values
+        ('reviewer', 'member.review', now()), ('reviewer', 'member.read_private', now()),
+        ('lead', 'member.review', now()), ('lead', 'event.manage', now());
+      insert into public.member_roles values
+        ('${memberId}', 'reviewer', 'test', now()), ('${memberId}', 'lead', 'test', now());
+      select set_config('app.current_user_id', '', false);
+      set role app_rls;
+    `)
+
+    const db = drizzle(client)
+    const expected: Record<string, string[]> = {
+      'same-admin': [...CHECKED_PERMISSIONS].sort(),
+      'same-member': ['event.manage', 'member.read_private', 'member.review'],
+      'same-outsider': [],
+    }
+    for (const [userId, permissions] of Object.entries(expected)) {
+      const fromApi = (await findPermissions(db as never, userId)).sort()
+      const fromRls = await client.query<{ permissions: string[] }>(
+        'select app_private.permissions_for($1) as permissions',
+        [userId],
+      )
+      assert.deepEqual(fromApi, [...fromRls.rows[0].permissions].sort(), `${userId}: API と RLS で答えが違う`)
+      assert.deepEqual(fromApi, permissions, `${userId}: 権限が想定と違う`)
+    }
+  } finally {
+    await client.close()
+  }
+})
+
+// RLS の 2 つの原則（docs/aidlc/components.md 3.6）を確かめる。
+//   原則 1：RLS は API より緩い。部員を管理する権限のどれか 1 つだけでも、部員の行がすべて読める。
+//   原則 2：RLS が止めるのは、他人の個人情報の流出と、権限の拡大だけ。
+test('RLS は API より緩く、個人情報の流出と権限の拡大だけを止める', async () => {
+  const client = await PGlite.create()
+  const id = (n: number) => `00000000-0000-4000-8000-000000000${n}`
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'rls-admin', memberId: id(601) })
+    await promoteToAdmin(client, 'rls-admin')
+    await approveMember(client, 'rls-admin', id(601))
+    await applyAsNewUser(client, { userId: 'rls-reader', memberId: id(602) })
+    await applyAsNewUser(client, { userId: 'rls-reviewer', memberId: id(603) })
+    await applyAsNewUser(client, { userId: 'rls-editor', memberId: id(604) })
+    await applyAsNewUser(client, { userId: 'rls-plain', memberId: id(605) })
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await readFile(resolve(dirname(roleTablesMigrationPath), '20261105072955_enforce_permissions.sql'), 'utf8'))
+
+    // 部員を管理する権限を 1 つずつ持つロールを作る。
+    // 606 はロールを持つが誰とも結び付いていない部員、607 はロールのない部員。
+    await client.exec(`
+      insert into public.app_roles (role_key, display_name) values
+        ('reader', 'Reader'), ('reviewer', 'Reviewer'), ('editor', 'Editor'), ('events', 'Events');
+      insert into public.role_permissions values
+        ('reader', 'member.read_private', now()), ('reviewer', 'member.review', now()),
+        ('editor', 'member.edit', now()), ('events', 'event.manage', now());
+      insert into public.member_roles values
+        ('${id(602)}', 'reader', 'test', now()), ('${id(603)}', 'reviewer', 'test', now()),
+        ('${id(604)}', 'editor', 'test', now());
+      insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
+      values ('rls-outsider', 'rls-outsider', 'rls-outsider@example.test', true, now(), now());
+      insert into public.app_accounts (user_id) values ('rls-outsider');
+      select set_config('app.current_user_id', 'rls-admin', false);
+      insert into public.members (member_id, registered_name, grade_id, emergency_contact, student_id, student_email)
+      values ('${id(606)}', 'with role', 1, 'contact', 'WITHROLE', 'with-role@student.example'),
+             ('${id(607)}', 'fresh', 1, 'contact', 'FRESH', 'fresh@student.example');
+      insert into public.member_roles values ('${id(606)}', 'events', 'test', now());
+    `)
+    const total = (await client.query<{ n: number }>('select count(*)::int as n from public.members')).rows[0].n
+
+    await client.exec('set role app_rls')
+    const visibleTo = async (userId: string) => {
+      await client.query(`select set_config('app.current_user_id', $1, false)`, [userId])
+      return (await client.query<{ n: number }>('select count(*)::int as n from public.members')).rows[0].n
+    }
+
+    // 原則 1：管理する権限のどれか 1 つで、すべての部員が見える（黙って 0 件にならない）
+    assert.equal(await visibleTo('rls-reader'), total, 'member.read_private だけで全員が見える')
+    assert.equal(await visibleTo('rls-reviewer'), total, 'member.review だけで全員が見える')
+    assert.equal(await visibleTo('rls-editor'), total, 'member.edit だけで全員が見える')
+
+    // 原則 1：守らない表は、アプリの接続ユーザーにすべて許している
+    const openPolicies = await client.query<{ tablename: string; qual: string; with_check: string }>(`
+      select tablename, qual, with_check from pg_policies
+      where tablename in ('event_messages', 'community_identities', 'community_memberships')
+      order by tablename
+    `)
+    assert.deepEqual(
+      openPolicies.rows.map((row) => [row.tablename, row.qual, row.with_check]),
+      [
+        ['community_identities', 'true', 'true'],
+        ['community_memberships', 'true', 'true'],
+        ['event_messages', 'true', 'true'],
+      ],
+    )
+
+    // 原則 2：管理する権限のない部員には、他人の個人情報が見えない
+    assert.equal(await visibleTo('rls-plain'), 1, '自分の行だけが見える')
+
+    // 原則 2：アカウントの結び付けで権限を広げられない
+    await assert.rejects(
+      client.exec(`update public.app_accounts set member_id = '${id(607)}' where user_id = 'rls-plain'`),
+      /only the account owner or a member manager/,
+      '結び付け済みのアカウントを、本人が別の部員に付け替えられない',
+    )
+    await client.query(`select set_config('app.current_user_id', 'rls-outsider', false)`)
+    await assert.rejects(
+      client.exec(`update public.app_accounts set member_id = '${id(606)}' where user_id = 'rls-outsider'`),
+      /only the account owner or a member manager/,
+      'ロールを持つ部員に、自分を結び付けられない',
+    )
+    await client.query(`select set_config('app.current_user_id', 'rls-newcomer', false)`)
+    await assert.rejects(
+      client.exec(`insert into public.app_accounts (user_id, member_id) values ('rls-newcomer', '${id(606)}')`),
+      /only the account owner or a member manager/,
+      'ロールを持つ部員に結び付いたアカウントを、新しく追加できない',
+    )
+    await client.query(`select set_config('app.current_user_id', 'rls-outsider', false)`)
+    await client.exec(`update public.app_accounts set member_id = '${id(607)}' where user_id = 'rls-outsider'`)
+    const linked = await client.query<{ member_id: string }>(`select member_id from public.app_accounts where user_id = 'rls-outsider'`)
+    assert.equal(linked.rows[0].member_id, id(607), 'ロールのない部員には、本人が結び付けられる（入部申請）')
   } finally {
     await client.close()
   }

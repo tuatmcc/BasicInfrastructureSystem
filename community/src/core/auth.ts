@@ -1,9 +1,9 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
-import type { RlsDatabase } from './db'
 import { verify } from 'hono/jwt'
 import { and, eq, gt } from 'drizzle-orm'
-import { appAccounts, memberRoles, rolePermissions, session, user } from '../../../share/drizzle/schema'
+import { appAccounts, session, user } from '../../../share/drizzle/schema'
+import { findPermissions } from './permissions'
 
 export type authUser = {
   id: string
@@ -13,35 +13,28 @@ export type appUser = {
   id: string
   name: string
   memberId: string | null
-  role: 'admin' | 'user'
   /**
-   * What this caller may do, resolved through the roles their member holds.
-   * Ask with `can()` from share/permissions; never branch on `role`.
+   * この呼び出し元ができること。部員が持つロールからたどって求めた権限の一覧。
+   * 判定には share/permissions の `can()` を使い、ロール名で分岐しない。
    */
   permissions: readonly string[]
 }
 
-
-// Who the caller is, according to the authentication store.
+// 認証ストアから見た「呼び出し元が誰か」。
 const subjectSelection = {
   id: user.id,
   name: user.name,
 }
 
-// What the caller may do, according to the domain: the account, and one row per
-// permission the member's roles carry. Left joins because someone who has not
-// joined has no member row and a member may hold no roles, so those columns
-// come back null.
+// ドメインから見た「呼び出し元はどの部員か」。
 const accountSelection = {
   memberId: appAccounts.memberId,
-  role: appAccounts.role,
-  permissionKey: rolePermissions.permissionKey,
 }
 
-// This is the boundary between the authentication store and the domain, and the
-// only place that reads both. The two lookups stay separate rather than joining
-// across app_auth and public, so moving the authentication store to its own
-// database turns the first one into a remote call and leaves the second alone.
+// 認証ストアとドメインの境目。両方を読むのはここだけ。
+// 2 つの検索は app_auth と public をまたいで結合せず、別々に行う。
+// 認証ストアを別のデータベースへ移したとき、1 つ目だけを外部への問い合わせに
+// 置き換えれば済むようにするため。
 const loadAppUser = async (
   c: Context<AppContext>,
   userId: string,
@@ -67,14 +60,10 @@ const loadAppUser = async (
 
     if (!subject) return null;
 
-    const grants = await db
+    const [account] = await db
       .select(accountSelection)
       .from(appAccounts)
-      .leftJoin(memberRoles, eq(memberRoles.memberId, appAccounts.memberId))
-      .leftJoin(rolePermissions, eq(rolePermissions.roleKey, memberRoles.roleKey))
       .where(eq(appAccounts.userId, subject.id));
-
-    const [account] = grants;
 
     if (!account) return null;
 
@@ -82,10 +71,7 @@ const loadAppUser = async (
       id: subject.id,
       name: subject.name,
       memberId: account.memberId,
-      role: account.role === 'admin' ? 'admin' as const : 'user' as const,
-      // Two roles can carry the same permission, and a caller holding none
-      // arrives as one row whose permission is null.
-      permissions: Array.from(new Set(grants.flatMap((grant) => grant.permissionKey ?? []))),
+      permissions: await findPermissions(db, subject.id),
     };
   });
 
@@ -95,17 +81,14 @@ const loadAppUser = async (
 
   c.get('db').setIdentity({
     userId: resolved.id,
-    memberId: resolved.memberId,
-    role: resolved.role,
   });
 
   return resolved;
 }
 
-// The development bypass skips token verification entirely, so reaching it on a
-// deployed Worker would leave the API open. NODE_ENV is an ordinary variable
-// that a misconfigured deployment can carry, but the hostname the request
-// actually arrived on is not, so both must agree before the bypass applies.
+// 開発用の抜け道はトークンの検証を丸ごと飛ばすので、デプロイ先で有効になると
+// API を誰でも使えてしまう。NODE_ENV は設定ミスで本番にも入り得るただの変数だが、
+// リクエストが実際に届いたホスト名はそうではない。両方がそろったときだけ抜け道を使う。
 const isLocalRequest = (c: Context<AppContext>) => {
   try {
     const hostname = new URL(c.req.url).hostname

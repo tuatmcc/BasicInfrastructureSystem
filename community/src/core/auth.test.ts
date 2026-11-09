@@ -9,23 +9,24 @@ test('auth middleware reloads the application user and does not turn downstream 
   let capturedUser: appUser | undefined;
   let capturedIdentity: unknown;
 
-  // The middleware asks the authentication store who the caller is, then asks
-  // the domain what that subject may do. Two selects, never a join across them.
+  // ミドルウェアは、認証ストアに「誰か」を、ドメインに「どの部員か」と「何ができるか」を聞く。
+  // 認証ストアとドメインをまたいで結合はしない。
   let selectCall = 0;
   const transaction = {
     select: () => {
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Test User' }]
-        : [{ memberId: null, role: 'user', permissionKey: null }];
-      // The domain lookup left-joins the grants and groups by the account, so
-      // the stub has to offer the same shape as the builder it stands in for.
+        : [{ memberId: null }];
       const limit = async () => rows;
-      // The domain lookup left-joins the grants; the subject lookup does not.
       const where = () => Object.assign(limit(), { limit });
       const leftJoin = () => ({ leftJoin, where });
       return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
+    // 権限の検索（findPermissions）。部員の行がないので、権限は 1 つも返らない。
+    selectDistinct: () => ({
+      from: () => ({ innerJoin: () => ({ innerJoin: () => ({ where: async () => [] }) }) }),
+    }),
   };
   const db = {
     transaction: (operation: (tx: unknown) => Promise<unknown>) => operation(transaction),
@@ -65,12 +66,9 @@ test('auth middleware reloads the application user and does not turn downstream 
     memberId: null,
     // No member row, so no role, so nothing granted.
     permissions: [],
-    role: 'user',
   });
   assert.deepEqual(capturedIdentity, {
     userId: 'user-1',
-    memberId: null,
-    role: 'user',
   });
 });
 
@@ -136,13 +134,16 @@ test('the development bypass still applies to a local request', async () => {
       selectCall += 1;
       const rows = selectCall === 1
         ? [{ id: 'user-1', name: 'Local Dev' }]
-        : [{ memberId: null, role: 'user', permissionKey: null }];
+        : [{ memberId: null }];
       const limit = async () => rows;
-      // The domain lookup left-joins the grants; the subject lookup does not.
       const where = () => Object.assign(limit(), { limit });
       const leftJoin = () => ({ leftJoin, where });
       return { from: () => ({ innerJoin: () => ({ where }), leftJoin, where }) };
     },
+    // 権限の検索（findPermissions）。部員の行がないので、権限は 1 つも返らない。
+    selectDistinct: () => ({
+      from: () => ({ innerJoin: () => ({ innerJoin: () => ({ where: async () => [] }) }) }),
+    }),
   };
   const db = {
     transaction: (operation: (tx: unknown) => Promise<unknown>) => operation(transaction),

@@ -1,3 +1,4 @@
+import { can } from "../../../share/permissions";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import * as schema from "../../../share/drizzle/schema";
@@ -8,6 +9,7 @@ import { sign } from "hono/jwt";
 import { setCookie } from "hono/cookie";
 import { eq } from "drizzle-orm";
 import { getAuthDatabase, type AppDatabase } from "../core/db";
+import { findPermissions } from "../core/permissions";
 
 export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
     const db = database ?? getAuthDatabase(c);
@@ -21,16 +23,15 @@ export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
         trustedOrigins: [
             c.env.FRONTEND_URL || "http://localhost:3000"
         ],
-        // No additionalFields: membership and role belong to the domain and live
-        // in public.app_accounts, so Better Auth owns its tables outright and
-        // they can be moved to their own database.
+        // additionalFields は使わない。部員であることや権限はドメインの情報で、
+        // public.app_accounts などに置く。Better Auth のテーブルには認証の情報だけを持たせ、
+        // 別のデータベースへ移せるようにしておく。
         databaseHooks: {
             user: {
                 create: {
-                    // A subject only becomes usable once the domain has its own
-                    // record of it. Creating it here keeps the write in the
-                    // boundary layer instead of a trigger that would make the
-                    // authentication schema depend on the domain again.
+                    // ログインした人は、ドメイン側に自分の行（app_accounts）ができて初めて使える。
+                    // トリガーで作ると認証のスキーマがドメインに依存してしまうので、
+                    // 境目にあたるここで作る。
                     after: async (createdUser) => {
                         await db
                             .insert(schema.appAccounts)
@@ -51,13 +52,13 @@ export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
             },
         },
         socialProviders: {
-            // Discord is the only identity provider. The same account both signs
-            // the member in and supplies the guild membership evidence the join
-            // flow verifies, so there is no second provider to link or reconcile.
+            // ログイン手段は Discord だけ。同じアカウントで、ログインと、
+            // 入部時に確かめるサーバー参加の証明の両方をまかなう。
+            // そのため、別のログイン手段とアカウントを結び付ける必要がない。
             discord: {
                 clientId: c.env.DISCORD_CLIENT_ID,
                 clientSecret: c.env.DISCORD_CLIENT_SECRET,
-                // Appended to Better Auth's default identify+email scopes.
+                // Better Auth の既定（identify と email）に追加で求める範囲。
                 scope: ["guilds"],
             }
         },
@@ -67,12 +68,18 @@ export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
     });
 };
 
+// ログイン直後に移動させるページを、権限と在籍状態から決める。上から順に判定する。
 export const getPostLoginRedirectPath = (
-    role: 'admin' | 'user',
+    permissions: readonly string[],
     memberStatus: string | null | undefined,
-) => role === 'admin' ? '/' : memberStatus === 'active' ? '/me' : '/join';
+) => {
+    if (can(permissions, "event.manage")) return "/";
+    if (can(permissions, "member.read_private")) return "/admin/members";
+    if (memberStatus === "active") return "/me";
+    return "/join";
+};
 
-// JWT Endpoint Route definition
+// JWT を発行するエンドポイントの定義
 export const getJwtRoute = createRoute({
     method: "get",
     path: "/jwt",
@@ -94,7 +101,7 @@ export const getJwtRoute = createRoute({
     },
 });
 
-// JWT Endpoint Handler
+// JWT を発行するエンドポイントの処理
 export const getJwtHandler = async (c: Context<AppContext>) => {
     const auth = getAuth(c);
     const session = await auth.api.getSession({
@@ -109,24 +116,20 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
     }
 
     try {
-        // Better Auth proved who the caller is; the domain decides what the JWT
-        // may claim, so role and membership are read from app_accounts.
+        // 誰がログインしたかは Better Auth が確かめた。何ができるかは JWT に入れず、
+        // リクエストのたびにデータベースが決める。
         const authDb = getAuthDatabase(c);
 
-        // The create hook normally provisions this row. Repairing it here costs
-        // one statement per sign-in and keeps a subject that slipped through —
-        // a hook that failed, a row seeded outside the flow — from being locked
-        // out permanently with no path back except editing the database.
+        // この行はふつう、ユーザー作成時のフックで作られる。フックが失敗したなどで
+        // 行がないと、データベースを直接直す以外に戻る手段がなくなる。
+        // ログインのたびに 1 回書き込むだけで防げるので、ここでも作っておく。
         await authDb
             .insert(schema.appAccounts)
             .values({ userId: session.user.id })
             .onConflictDoNothing();
 
         const [currentUser] = await authDb
-            .select({
-                role: schema.appAccounts.role,
-                memberId: schema.appAccounts.memberId,
-            })
+            .select({ memberId: schema.appAccounts.memberId })
             .from(schema.appAccounts)
             .where(eq(schema.appAccounts.userId, session.user.id))
             .limit(1);
@@ -136,12 +139,9 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             return c.redirect(`${frontendUrl}/login?error=user_not_found`);
         }
 
-        const role = currentUser.role === "admin" ? "admin" : "user";
         const db = c.get("db");
         db.setIdentity({
             userId: session.user.id,
-            memberId: currentUser.memberId,
-            role,
         });
 
         const memberId = currentUser.memberId;
@@ -156,7 +156,6 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             id: session.user.id,
             sid: session.session.id,
             name: session.user.name,
-            role,
             exp: Math.min(
                 Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
                 Math.floor(new Date(session.session.expiresAt).getTime() / 1000),
@@ -175,8 +174,9 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             domain: c.env.COOKIE_DOMAIN || undefined,
         });
 
-        const redirectPath = getPostLoginRedirectPath(role, member?.memberStatus);
-        console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id} with role ${payload.role}`);
+        const permissions = await findPermissions(authDb, session.user.id);
+        const redirectPath = getPostLoginRedirectPath(permissions, member?.memberStatus);
+        console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id}`);
         return c.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {
         console.error("[JWT Endpoint] Error generating JWT:", error);

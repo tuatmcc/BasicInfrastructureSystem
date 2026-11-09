@@ -1,6 +1,6 @@
 -- Run manually in Supabase SQL Editor after replacing both placeholders.
 -- Preconditions: the operator signed in, linked Discord via Better Auth, and
--- completed target-guild verification. This file is not a migration.
+-- completed target-guild verification and submitted a membership application. This file is not a migration.
 
 begin;
 
@@ -38,15 +38,19 @@ begin
     raise exception 'expected exactly one verified Discord/guild identity, found %', matched_count;
   end if;
 
-  -- role is a domain fact and lives in app_accounts, not in the auth store.
-  update public.app_accounts
-  set role = 'admin',
-      updated_at = now()
-  where user_id = matched_user_id
-    and role = 'user';
+  -- Bootstrap is an operator-only grant; normal delegation is implemented in U-5.
+  insert into public.member_roles(member_id, role_key, granted_by_user_id)
+  select member_id, 'admin', 'operator:initial-admin'
+  from public.app_accounts
+  where user_id = matched_user_id and member_id is not null
+  on conflict do nothing;
 
-  if not found then
-    raise exception 'target user was not in the promotable user role';
+  if not exists (
+    select 1 from public.app_accounts a
+    join public.member_roles mr on mr.member_id = a.member_id
+    where a.user_id = matched_user_id and mr.role_key = 'admin'
+  ) then
+    raise exception 'target user must submit a membership application before bootstrap';
   end if;
 end
 $$;

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+// 画面側では「ログインしているか」だけを確かめる。
+// 権限は API とデータベースが確かめ、足りなければ 403 を返す。各ページはその 403 を受けて表示を変える。
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
@@ -8,15 +10,14 @@ export async function middleware(request: NextRequest) {
 
   if (isPublicAsset) return NextResponse.next()
 
-  // Unlike the Workers, this is safe to key on NODE_ENV: Next inlines it at
-  // build time, so a production build cannot be talked back into the bypass by
-  // a runtime variable. The Workers read theirs at runtime and therefore also
-  // require a local hostname.
+  // Worker と違い、ここは NODE_ENV だけで判定してよい。Next はビルド時に値を埋め込むので、
+  // 本番用にビルドしたものが実行時の変数で開発用の動作に切り替わることはない。
+  // （Worker は実行時に読むので、ホスト名が localhost であることも条件にしている。）
   if (isDevelopment) {
     return NextResponse.next()
   }
 
-  // Better Auth uses session_token, but we use app-authorization (JWT)
+  // Better Auth の session_token ではなく、独自に発行した JWT（app-authorization）を見る。
   const token = request.cookies.get('app-authorization')
 
   if (!token && !isLoginPage) {
@@ -25,26 +26,6 @@ export async function middleware(request: NextRequest) {
 
   if (token && isLoginPage) {
     return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  // Admin check and default landing split
-  if (token && (pathname.startsWith('/event') || pathname.startsWith('/admin') || pathname === '/')) {
-    try {
-        const jwtSecret = process.env.JWT_SECRET;
-        if (!jwtSecret) {
-          throw new Error('[Middleware] Configuration error: JWT_SECRET environment variable is missing.');
-        }
-
-        const { jwtVerify } = await import('jose')
-        const secret = new TextEncoder().encode(jwtSecret)
-        const { payload } = await jwtVerify(token.value, secret)
-        if (payload.role !== 'admin') {
-          return NextResponse.redirect(new URL('/me', request.url))
-        }
-    } catch (error) {
-        console.error('[Middleware] Admin check error:', error)
-        return NextResponse.redirect(new URL('/login', request.url))
-    }
   }
 
   return NextResponse.next()

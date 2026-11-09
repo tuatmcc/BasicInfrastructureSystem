@@ -37,7 +37,7 @@ export const getUserMeService: RouteHandler<typeof getUserMeRoute, AppContext> =
         return c.json({ error: "User not found in database" }, 404);
     }
 
-    return c.json({ ...dbUser, memberId: appUser.memberId, role: appUser.role }, 200);
+    return c.json({ ...dbUser, memberId: appUser.memberId, permissions: [...appUser.permissions] }, 200);
 };
 
 export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppContext> = async (c) => {
@@ -59,5 +59,5 @@ export const updateUserMeService: RouteHandler<typeof updateUserMeRoute, AppCont
         return c.json({ error: "User not found in database" }, 404);
     }
 
-    return c.json({ ...updatedUser, memberId: appUser.memberId, role: appUser.role }, 200);
+    return c.json({ ...updatedUser, memberId: appUser.memberId, permissions: [...appUser.permissions] }, 200);
 };

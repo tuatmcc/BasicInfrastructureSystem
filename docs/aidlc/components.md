@@ -196,6 +196,34 @@ community は member から受け取った権限の一覧を使う（`unit-of-wo
   順序を誤ったときの症状（全員の権限がゼロ）も原因にたどり着きにくい
 - SECURITY DEFINER 関数で権限を返す。仕組みが増えるわりに、上の理由で守れるものがない
 
+### 3.6 RLS の範囲（2026-11-09 決定）
+
+権限の判定は API が行う。RLS は、API の判定を書き忘れたときの最後の守りとして、必要な所だけに絞る。
+
+**原則**
+
+1. **RLS は API より必ず緩くする。** API が許す操作を RLS が拒むことはない。
+   RLS に拒まれた行は、エラーにならず黙って消える。API と食い違うと「0 件」に見え、原因にたどり着きにくい
+2. **RLS が止めるのは、どの API でも起きてはならない次の2つだけ。**
+   - 他人の個人情報が、部員を管理する権限のない人に渡ること
+   - 権限が勝手に広がること
+
+**表ごとの扱い**
+
+| 表 | RLS | ルール |
+| --- | --- | --- |
+| `members`・`member_directory_profiles` | 守る | 読み書きできるのは、本人か、部員を管理する権限（`member.read_private`・`member.review`・`member.edit` のどれか）を持つ人（`app_private.is_member_manager`） |
+| `member_status_history` | 守る（読み取り） | 同上。書き込みはトリガーだけ |
+| `member_roles` | 守る（書き込み） | 付与と剥奪は `role.manage` を持つ人だけ。読み取りは誰でも（3.5） |
+| `app_accounts` | 守る（`member_id` の書き込み） | 結び付けを外す、本人がロールのない部員に結び付ける（入部申請）、部員を管理する権限を持つ人が結び付ける（承認）の3つだけ。ポリシーでは変更前の値を見られないのでトリガーで確かめる |
+| `event_messages`・`community_identities`・`community_memberships` | 守らない | アプリの接続ユーザーにすべて許す。判定は API |
+| `grades`・`app_roles`・`permissions`・`role_permissions` | 守らない | 読み取りは誰でも。書き込みは migration だけ（接続ユーザーに権限を与えていない） |
+
+`members` で、部員一覧の API は `member.read_private` を要求するが、RLS は `member.review` だけを持つ人にも読ませる。
+原則1を守るために意図して緩くしている。細かい区別は API が行う。
+
+整合性の決まり（3.4 の不変条件、入部の状態遷移のトリガー、外部キー）は RLS ではないので、この範囲とは別に、どの API から呼んでも破れないよう守り続ける。
+
 ---
 
 ## 4. 書き込みの共通化
