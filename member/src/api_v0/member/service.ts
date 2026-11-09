@@ -540,7 +540,11 @@ type DirectoryEntryRow = {
 export const getDirectoryService: RouteHandler<typeof getDirectoryRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (!appUser.memberId || !can(appUser.permissions, 'member.read_public')) {
+  const memberId = appUser.memberId
+  if (!memberId) {
+    return c.json({ error: 'Only active members may read the directory', code: 'active_member_required' }, 403)
+  }
+  if (!can(appUser.permissions, "member.read_public")) {
     return c.json({ error: 'Only active members may read the directory', code: 'active_member_required' }, 403)
   }
 
@@ -548,7 +552,7 @@ export const getDirectoryService: RouteHandler<typeof getDirectoryRoute, AppCont
   const [current] = await db.transaction((tx) => tx
     .select({ status: members.memberStatus })
     .from(members)
-    .where(eq(members.memberId, appUser.memberId as string))
+    .where(eq(members.memberId, memberId))
     .limit(1))
   if (current?.status !== 'active') {
     return c.json({ error: 'Only active members may read the directory', code: 'active_member_required' }, 403)
@@ -684,7 +688,10 @@ export const createApproveMemberService = (
 ): RouteHandler<typeof approveMemberRoute, AppContext> => async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (!can(appUser.permissions, "member.review") || !can(appUser.permissions, "member.read_private")) {
+  if (!can(appUser.permissions, "member.review")) {
+    return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
+  }
+  if (!can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -824,7 +831,10 @@ const adminProfileKeys = [
 export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (!can(appUser.permissions, "member.edit") || !can(appUser.permissions, "member.read_private")) {
+  if (!can(appUser.permissions, "member.edit")) {
+    return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
+  }
+  if (!can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
@@ -933,7 +943,10 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
 export const rejectMemberService: RouteHandler<typeof rejectMemberRoute, AppContext> = async (c) => {
   setPrivateNoStore(c)
   const appUser = c.get('appUser')
-  if (!can(appUser.permissions, "member.review") || !can(appUser.permissions, "member.read_private")) {
+  if (!can(appUser.permissions, "member.review")) {
+    return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
+  }
+  if (!can(appUser.permissions, "member.read_private")) {
     return c.json({ error: 'Forbidden', code: 'forbidden' }, 403)
   }
 
