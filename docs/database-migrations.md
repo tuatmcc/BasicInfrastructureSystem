@@ -140,25 +140,38 @@ not embed a personal ID in a migration.
 
 ## Permission enforcement (U-3)
 
-`20261105072955_enforce_permissions.sql` replaces application role claims with
-`app_private.permissions_for(user_id)` and `has_permission(user_id, permission)`.
-Both API authentication and RLS use this resolver. The runtime passes only
-`app.current_user_id`; ownership is read from `app_accounts`, and its old `role`
-column is removed. Historical migrations retain the old column until this step.
+`20261105072955_enforce_permissions.sql` replaces application role claims. The
+runtime passes only `app.current_user_id`; ownership is read from
+`app_accounts`, and its old `role` column is removed. Historical migrations
+retain the old column until this step.
+
+Permissions are resolved in two places that must agree: the API uses
+`findPermissions` (`member/src/core/permissions.ts`,
+`community/src/core/permissions.ts`), written with Drizzle so that TypeScript
+holds no raw SQL, and RLS uses `app_private.permissions_for` /
+`has_permission`. A PGlite test in `member/src/core/migration.integration.test.ts`
+fails if their answers differ.
+
+The API makes every permission decision. RLS is deliberately looser than the
+API and stops only two things (`docs/aidlc/components.md` 3.6): private member
+data reaching someone who cannot manage members (`app_private.is_member_manager`),
+and permissions widening (role grants need `role.manage`; a trigger restricts
+which account may be linked to which member). `event_messages`,
+`community_identities` and `community_memberships` are open to `app_rls`.
 
 Deploy the application and this migration together. The current-user response
-now returns `permissions`, not `role`; JWTs contain identity/session claims only.
-Management-page routing rechecks the current user through the API with caching
-disabled, so a token issued before a revocation does not retain page access.
+now returns `permissions`, not `role`; JWTs contain identity/session claims
+only. The frontend checks only that a session cookie exists; pages show the
+API's 403 instead of the middleware redirecting by permission.
 
 Membership review uses `member.review`; private reads use `member.read_private`;
 editing and withdrawal use `member.edit`. Membership mutations also require
 `member.read_private` because their responses include private member details.
-Event operations use `event.manage`;
-reaction reads use `reaction.read`; role grants/revocations use `role.manage`.
-The directory requires `member.read_public`. Approval grants the fixed base
-`member` role through an internal trigger, so new members receive the same
-access as members seeded by U-1. Grade data remains migration-managed.
+Event operations use `event.manage`; reaction reads use `reaction.read`; role
+grants/revocations use `role.manage`. The directory requires
+`member.read_public`. Approval grants the fixed base `member` role through an
+internal trigger, so new members receive the same access as members seeded by
+U-1. Grade data remains migration-managed.
 
 The operator-only `promote_initial_admin.sql` now grants a member role. Submit a
 membership application before running it. UI-based delegation and last-manager
