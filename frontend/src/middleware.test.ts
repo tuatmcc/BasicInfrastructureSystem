@@ -3,36 +3,45 @@ import test from 'node:test'
 import { NextRequest } from 'next/server'
 import { middleware } from './middleware'
 
-test('management pages use current API permissions and fail closed', async () => {
-  const previousFetch = globalThis.fetch
+const withProduction = async (run: () => Promise<void>) => {
   const previousEnv = { ...process.env }
-  Object.assign(process.env, { NODE_ENV: 'production', NEXT_PUBLIC_COMMUNITY_API_URL: 'https://api.example.test' })
+  Object.assign(process.env, { NODE_ENV: 'production' })
   try {
-    for (const scenario of [
-      { path: '/', permissions: [], destination: '/me' },
-      { path: '/event', permissions: ['event.manage'], destination: null },
-      { path: '/admin/members', permissions: ['event.manage'], destination: '/me' },
-      { path: '/admin/members', permissions: ['member.read_private'], destination: null },
-    ]) {
-      globalThis.fetch = async (input, options) => {
-        assert.equal(String(input), 'https://api.example.test/api/v0/user/me')
-        assert.deepEqual(options?.headers, { Authorization: 'Bearer existing-session-token' })
-        assert.equal(options?.cache, 'no-store')
-        return Response.json({ permissions: scenario.permissions })
-      }
-      const request = new NextRequest(`https://app.example.test${scenario.path}`, {
-        headers: { Cookie: 'app-authorization=existing-session-token' },
-      })
-      const response = await middleware(request)
-      assert.equal(response.headers.get('location'), scenario.destination ? `https://app.example.test${scenario.destination}` : null)
-    }
-    globalThis.fetch = async () => new Response(null, { status: 401 })
-    const response = await middleware(new NextRequest('https://app.example.test/event', {
-      headers: { Cookie: 'app-authorization=expired-session-token' },
-    }))
-    assert.equal(response.headers.get('location'), 'https://app.example.test/login')
+    await run()
   } finally {
-    globalThis.fetch = previousFetch
     process.env = previousEnv
   }
+}
+
+const locationOf = async (path: string, cookie?: string) => {
+  const request = new NextRequest(`https://app.example.test${path}`, {
+    headers: cookie ? { Cookie: cookie } : {},
+  })
+  const response = await middleware(request)
+  return response.headers.get('location')
+}
+
+test('ログインしていなければ、ログインページへ移動させる', async () => {
+  await withProduction(async () => {
+    assert.equal(await locationOf('/admin/members'), 'https://app.example.test/login')
+    assert.equal(await locationOf('/login'), null)
+  })
+})
+
+test('ログインしていれば、権限を問い合わせずにページを開かせる', async () => {
+  await withProduction(async () => {
+    const previousFetch = globalThis.fetch
+    globalThis.fetch = async () => {
+      throw new Error('画面側で権限を問い合わせてはいけない')
+    }
+    try {
+      const cookie = 'app-authorization=existing-session-token'
+      for (const path of ['/', '/event', '/admin/members', '/me']) {
+        assert.equal(await locationOf(path, cookie), null)
+      }
+      assert.equal(await locationOf('/login', cookie), 'https://app.example.test/')
+    } finally {
+      globalThis.fetch = previousFetch
+    }
+  })
 })

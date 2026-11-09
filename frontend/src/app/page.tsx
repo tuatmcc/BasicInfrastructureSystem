@@ -17,6 +17,10 @@ export default function AdminDashboardPage() {
     queryKey: ['admin-event-messages'],
     queryFn: async () => {
       const res = await communityClient.api.v0.message.$get()
+      const status = res.status as number
+      // 権限は API が確かめる。画面は返ってきた結果に合わせて表示を変えるだけ。
+      if (status === 401) throw new Error('ログイン状態を確認できません。再ログインしてください。')
+      if (status === 403) throw new Error('権限がないため、イベント通知は表示できません。')
       if (!res.ok) {
         throw new Error(`Event message API Error: ${res.status}`)
       }
