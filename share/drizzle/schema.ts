@@ -388,3 +388,22 @@ export const memberRoles = pgTable("member_roles", {
 	}).onUpdate("cascade").onDelete("restrict"),
 	index("member_roles_role_key_idx").on(table.roleKey),
 ])
+
+// ロールの変更履歴（FR-5.3）。トリガーだけが書き、アプリは読むことしかできない。
+export const memberRoleHistory = pgTable("member_role_history", {
+	historyId: bigint("history_id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+	memberId: uuid("member_id").notNull(),
+	roleKey: text("role_key").notNull(),
+	action: text("action", { enum: ["grant", "revoke"] }).notNull(),
+	// 変更した人のユーザー ID の写し。アプリ以外からの変更は 'operator'。
+	actorUserId: text("actor_user_id").notNull(),
+	occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.memberId],
+		foreignColumns: [members.memberId],
+		name: "member_role_history_member_id_fkey",
+	}).onDelete("restrict"),
+	index("member_role_history_member_idx").on(table.memberId, table.occurredAt.desc()),
+	check("member_role_history_action_valid", sql`${table.action} in ('grant', 'revoke')`),
+])
