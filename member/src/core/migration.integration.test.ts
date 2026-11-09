@@ -4,7 +4,9 @@ import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
+import { drizzle } from 'drizzle-orm/pglite'
 import { CHECKED_PERMISSIONS } from '../../../share/permissions'
+import { findPermissions } from './permissions'
 
 const migrationPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -885,4 +887,56 @@ test('database permissions replace role claims and keep independent grants indep
     const revoked = await client.query<{ allowed: boolean }>(`select app_private.has_permission('permission-member', 'event.manage') as allowed`)
     assert.equal(revoked.rows[0].allowed, false)
   } finally { await client.close() }
+})
+
+// API（findPermissions）と RLS（app_private.permissions_for）は、同じたどり方で権限を求める。
+// 片方だけ変えると答えが食い違うので、立場の違う 3 人について一致を確かめる。
+// 認証処理は呼び出し元が決まる前に権限を読むので、app.current_user_id が空の状態で読む。
+test('API と RLS は同じ権限を求める', async () => {
+  const client = await PGlite.create()
+  const adminId = '00000000-0000-4000-8000-000000000501'
+  const memberId = '00000000-0000-4000-8000-000000000502'
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'same-admin', memberId: adminId })
+    await promoteToAdmin(client, 'same-admin')
+    await approveMember(client, 'same-admin', adminId)
+    await applyAsNewUser(client, { userId: 'same-member', memberId })
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await readFile(resolve(dirname(roleTablesMigrationPath), '20261105072955_enforce_permissions.sql'), 'utf8'))
+
+    // same-member には、同じ権限（member.review）を含む 2 つのロールを付ける。
+    // same-outsider はログインしただけで、部員の行がない。
+    await client.exec(`
+      insert into app_auth."user" (id, name, email, email_verified, created_at, updated_at)
+      values ('same-outsider', 'same-outsider', 'same-outsider@example.test', true, now(), now());
+      insert into public.app_accounts (user_id) values ('same-outsider');
+      insert into public.app_roles (role_key, display_name) values ('reviewer', 'Reviewer'), ('lead', 'Lead');
+      insert into public.role_permissions values
+        ('reviewer', 'member.review', now()), ('reviewer', 'member.read_private', now()),
+        ('lead', 'member.review', now()), ('lead', 'event.manage', now());
+      insert into public.member_roles values
+        ('${memberId}', 'reviewer', 'test', now()), ('${memberId}', 'lead', 'test', now());
+      select set_config('app.current_user_id', '', false);
+      set role app_rls;
+    `)
+
+    const db = drizzle(client)
+    const expected: Record<string, string[]> = {
+      'same-admin': [...CHECKED_PERMISSIONS].sort(),
+      'same-member': ['event.manage', 'member.read_private', 'member.review'],
+      'same-outsider': [],
+    }
+    for (const [userId, permissions] of Object.entries(expected)) {
+      const fromApi = (await findPermissions(db as never, userId)).sort()
+      const fromRls = await client.query<{ permissions: string[] }>(
+        'select app_private.permissions_for($1) as permissions',
+        [userId],
+      )
+      assert.deepEqual(fromApi, [...fromRls.rows[0].permissions].sort(), `${userId}: API と RLS で答えが違う`)
+      assert.deepEqual(fromApi, permissions, `${userId}: 権限が想定と違う`)
+    }
+  } finally {
+    await client.close()
+  }
 })

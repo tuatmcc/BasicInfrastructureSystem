@@ -1,8 +1,9 @@
 import type { Context, Next } from 'hono'
 import { AppContext } from './types'
 import { verify } from 'hono/jwt'
-import { and, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt } from 'drizzle-orm'
 import { appAccounts, session, user } from '../../../share/drizzle/schema'
+import { findPermissions } from './permissions'
 
 export type authUser = {
   id: string
@@ -25,10 +26,9 @@ const subjectSelection = {
   name: user.name,
 }
 
-// 権限は、RLS と同じデータベース関数（app_private.permissions_for）で求める。
+// ドメインから見た「呼び出し元はどの部員か」。
 const accountSelection = {
   memberId: appAccounts.memberId,
-  permissions: sql<string[]>`app_private.permissions_for(${appAccounts.userId})`,
 }
 
 // 認証ストアとドメインの境目。両方を読むのはここだけ。
@@ -71,7 +71,7 @@ const loadAppUser = async (
       id: subject.id,
       name: subject.name,
       memberId: account.memberId,
-      permissions: account.permissions,
+      permissions: await findPermissions(db, subject.id),
     };
   });
 

@@ -7,8 +7,9 @@ import { Context } from "hono";
 import { createRoute, z } from "@hono/zod-openapi";
 import { sign } from "hono/jwt";
 import { setCookie } from "hono/cookie";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getAuthDatabase, type AppDatabase } from "../core/db";
+import { findPermissions } from "../core/permissions";
 
 export const getAuth = (c: Context<AppContext>, database?: AppDatabase) => {
     const db = database ?? getAuthDatabase(c);
@@ -128,10 +129,7 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             .onConflictDoNothing();
 
         const [currentUser] = await authDb
-            .select({
-                permissions: sql<string[]>`app_private.permissions_for(${schema.appAccounts.userId})`,
-                memberId: schema.appAccounts.memberId,
-            })
+            .select({ memberId: schema.appAccounts.memberId })
             .from(schema.appAccounts)
             .where(eq(schema.appAccounts.userId, session.user.id))
             .limit(1);
@@ -176,7 +174,8 @@ export const getJwtHandler = async (c: Context<AppContext>) => {
             domain: c.env.COOKIE_DOMAIN || undefined,
         });
 
-        const redirectPath = getPostLoginRedirectPath(currentUser.permissions, member?.memberStatus);
+        const permissions = await findPermissions(authDb, session.user.id);
+        const redirectPath = getPostLoginRedirectPath(permissions, member?.memberStatus);
         console.log(`[JWT Endpoint] Successfully issued JWT for user ${session.user.id}`);
         return c.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {
