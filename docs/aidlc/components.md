@@ -217,6 +217,7 @@ community は member から受け取った権限の一覧を使う（`unit-of-wo
 | `member_roles` | 守る（書き込み） | 付与と剥奪は `role.manage` を持つ人だけ。読み取りは誰でも（3.5） |
 | `app_accounts` | 守る（`member_id` の書き込み） | 結び付けを外す、本人がロールのない部員に結び付ける（入部申請）、部員を管理する権限を持つ人が結び付ける（承認）の3つだけ。ポリシーでは変更前の値を見られないのでトリガーで確かめる |
 | `event_messages`・`community_identities`・`community_memberships` | 守らない | アプリの接続ユーザーにすべて許す。判定は API |
+| `member_role_history` | 守らない（読み取りのみ） | ロールの変更履歴（FR-5.3、U-5）。トリガーだけが書き、アプリには読み取りしか許さない。見せる相手は API が `role.manage` で決める |
 | `grades`・`app_roles`・`permissions`・`role_permissions` | 守らない | 読み取りは誰でも。書き込みは migration だけ（接続ユーザーに権限を与えていない） |
 
 `members` で、部員一覧の API は `member.read_private` を要求するが、RLS は `member.review` だけを持つ人にも読ませる。

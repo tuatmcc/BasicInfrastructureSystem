@@ -1036,3 +1036,90 @@ test('RLS は API より緩く、個人情報の流出と権限の拡大だけ�
     await client.close()
   }
 })
+
+// U-5（FR-5.2・FR-5.3）：ロールの変更は履歴に残り、最後の管理者は外せない。
+test('ロールの変更は履歴に残り、最後の管理者は外せない', async () => {
+  const client = await PGlite.create()
+  const firstAdmin = '00000000-0000-4000-8000-000000000701'
+  const secondAdmin = '00000000-0000-4000-8000-000000000702'
+  const migration = (name: string) => readFile(resolve(dirname(roleTablesMigrationPath), name), 'utf8')
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'history-first', memberId: firstAdmin })
+    await promoteToAdmin(client, 'history-first')
+    await approveMember(client, 'history-first', firstAdmin)
+    await applyAsNewUser(client, { userId: 'history-second', memberId: secondAdmin })
+    await approveMember(client, 'history-first', secondAdmin)
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await migration('20261105072955_enforce_permissions.sql'))
+    await client.exec(await migration('20261109180000_role_history_and_last_manager.sql'))
+
+    const historyOf = async (memberId: string) =>
+      (await client.query<{ role_key: string; action: string; actor_user_id: string }>(
+        `select role_key, action, actor_user_id from public.member_role_history
+         where member_id = $1 order by history_id`,
+        [memberId],
+      )).rows
+
+    // 1 人目の管理者が、2 人目に admin を付ける
+    await client.exec(`
+      set role app_rls;
+      select set_config('app.current_user_id', 'history-first', false);
+      insert into public.member_roles (member_id, role_key, granted_by_user_id)
+      values ('${secondAdmin}', 'admin', 'history-first');
+    `)
+    assert.deepEqual(await historyOf(secondAdmin), [
+      { role_key: 'admin', action: 'grant', actor_user_id: 'history-first' },
+    ], '付与が、付けた人と一緒に履歴に残る')
+
+    // アプリからは履歴を書き換えられない
+    await assert.rejects(
+      client.exec(`insert into public.member_role_history (member_id, role_key, action, actor_user_id)
+                   values ('${secondAdmin}', 'admin', 'revoke', 'forged')`),
+      /permission denied/,
+      '履歴を追加できない',
+    )
+    await assert.rejects(client.exec('delete from public.member_role_history'), /permission denied/, '履歴を消せない')
+    await assert.rejects(
+      client.exec(`update public.member_role_history set actor_user_id = 'forged'`),
+      /permission denied/,
+      '履歴を書き換えられない',
+    )
+
+    // 2 人目が、1 人目の admin を外す（管理者がまだ 1 人残るので許される）
+    await client.exec(`
+      select set_config('app.current_user_id', 'history-second', false);
+      delete from public.member_roles where member_id = '${firstAdmin}' and role_key = 'admin';
+    `)
+    assert.deepEqual(
+      (await historyOf(firstAdmin)).filter((row) => row.action === 'revoke'),
+      [{ role_key: 'admin', action: 'revoke', actor_user_id: 'history-second' }],
+      '剥奪が、外した人と一緒に履歴に残る',
+    )
+
+    // 最後の管理者は、自分の admin を外せない
+    await assert.rejects(
+      client.exec(`delete from public.member_roles where member_id = '${secondAdmin}' and role_key = 'admin'`),
+      /at least one member must keep role.manage/,
+      '最後の管理者は外せない',
+    )
+    const remaining = await client.query<{ n: number }>(
+      `select count(*)::int as n from public.member_roles where member_id = '${secondAdmin}' and role_key = 'admin'`,
+    )
+    assert.equal(remaining.rows[0].n, 1, '取り消され、admin が残っている')
+
+    // role.manage を含まないロールは、最後の管理者からでも外せる
+    await client.exec(`delete from public.member_roles where member_id = '${secondAdmin}' and role_key = 'member'`)
+
+    // アプリ以外（運用手順など）からの変更は 'operator' として残る
+    await client.exec(`
+      reset role;
+      select set_config('app.current_user_id', '', false);
+      insert into public.member_roles (member_id, role_key, granted_by_user_id)
+      values ('${firstAdmin}', 'admin', 'operator:test');
+    `)
+    assert.equal((await historyOf(firstAdmin)).at(-1)?.actor_user_id, 'operator')
+  } finally {
+    await client.close()
+  }
+})
