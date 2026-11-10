@@ -217,6 +217,18 @@ export const conflictForUniqueMemberField = (error: unknown) => {
   return { error: 'Application conflicts with an existing record', code: 'application_conflict' }
 }
 
+// 最後の管理者を退部させようとしたときのエラー（keep_a_role_manager トリガー）を、409 の応答に変える。
+// 退部でロールが外れる（U-6）と、role.manage を持つ人が誰もいなくなるため、データベースが取り消す。
+export const conflictForLastRoleManager = (error: unknown) => {
+  let databaseError = error as { code?: string; message?: string; cause?: unknown }
+  for (let depth = 0; depth < 4 && !databaseError.code && databaseError.cause; depth += 1) {
+    databaseError = databaseError.cause as { code?: string; message?: string; cause?: unknown }
+  }
+  if (databaseError.code !== '23514') return null
+  if (!databaseError.message?.includes('at least one member must keep role.manage')) return null
+  return { error: 'At least one member must keep role.manage', code: 'last_role_manager' }
+}
+
 // Every write to a member row does the same thing: update only while the row is
 // still in the status and version the caller saw, and treat anything else as a
 // conflict. Keeping that in one place means a caller only states what it is
@@ -928,6 +940,8 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
     }
     const uniqueConflict = conflictForUniqueMemberField(error)
     if (uniqueConflict) return c.json(uniqueConflict, 409)
+    const lastManager = conflictForLastRoleManager(error)
+    if (lastManager) return c.json(lastManager, 409)
     throw error
   }
 

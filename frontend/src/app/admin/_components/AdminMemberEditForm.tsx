@@ -120,6 +120,13 @@ export default function AdminMemberEditForm({ member, onFeedback }: AdminMemberE
         queryClient.invalidateQueries({ queryKey: ['member-directory'] }),
       ])
     } catch (failure) {
+      if (failure instanceof MemberApiError && failure.code === 'last_role_manager') {
+        onFeedback({
+          type: 'error',
+          message: '最後の管理者は退部させられません。先に別の部員へ管理者のロールを付けてください。',
+        })
+        return
+      }
       const conflict = failure instanceof MemberApiError && failure.status === 409
       onFeedback({
         type: 'error',
