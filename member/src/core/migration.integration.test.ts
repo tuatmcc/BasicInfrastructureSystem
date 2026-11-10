@@ -1123,3 +1123,64 @@ test('ロールの変更は履歴に残り、最後の管理者は外せない',
     await client.close()
   }
 })
+
+// U-6（FR-4.7）：退部するとロールが外れる。最後の管理者は退部させられない。
+test('退部するとロールが外れ、最後の管理者は退部させられない', async () => {
+  const client = await PGlite.create()
+  const admin = '00000000-0000-4000-8000-000000000801'
+  const leaver = '00000000-0000-4000-8000-000000000802'
+  const migration = (name: string) => readFile(resolve(dirname(roleTablesMigrationPath), name), 'utf8')
+  try {
+    await replayThroughSplit(client)
+    await applyAsNewUser(client, { userId: 'withdraw-admin', memberId: admin })
+    await promoteToAdmin(client, 'withdraw-admin')
+    await approveMember(client, 'withdraw-admin', admin)
+    await applyAsNewUser(client, { userId: 'withdraw-leaver', memberId: leaver })
+    await approveMember(client, 'withdraw-admin', leaver)
+    await client.exec(await readFile(roleTablesMigrationPath, 'utf8'))
+    await client.exec(await migration('20261105072955_enforce_permissions.sql'))
+    await client.exec(await migration('20261109180000_role_history_and_last_manager.sql'))
+    await client.exec(await migration('20261110090000_remove_roles_on_withdrawal.sql'))
+
+    const rolesOf = async (memberId: string) =>
+      (await client.query<{ role_key: string }>(
+        'select role_key from public.member_roles where member_id = $1 order by role_key',
+        [memberId],
+      )).rows.map((row) => row.role_key)
+    const withdraw = (memberId: string) => client.exec(`
+      update public.members
+      set member_status = 'withdrawn', reviewed_at = now(), reviewed_by_user_id = 'withdraw-admin',
+          review_reason = 'test', application_version = application_version + 1
+      where member_id = '${memberId}';
+    `)
+
+    // leaver に役職のロールも付けておく
+    await client.exec(`
+      set role app_rls;
+      select set_config('app.current_user_id', 'withdraw-admin', false);
+      insert into public.member_roles (member_id, role_key, granted_by_user_id)
+      values ('${leaver}', 'admin', 'withdraw-admin');
+    `)
+    assert.deepEqual(await rolesOf(leaver), ['admin', 'member'])
+
+    // 退部の処理だけで、すべてのロールが外れる
+    await withdraw(leaver)
+    assert.deepEqual(await rolesOf(leaver), [], '退部でロールがすべて外れる')
+    const revoked = await client.query<{ role_key: string; actor_user_id: string }>(`
+      select role_key, actor_user_id from public.member_role_history
+      where member_id = '${leaver}' and action = 'revoke' order by role_key
+    `)
+    assert.deepEqual(revoked.rows, [
+      { role_key: 'admin', actor_user_id: 'withdraw-admin' },
+      { role_key: 'member', actor_user_id: 'withdraw-admin' },
+    ], '外れた記録が、退部させた人の名前で履歴に残る')
+
+    // 最後の管理者は退部させられない。退部の操作ごと取り消される
+    await assert.rejects(withdraw(admin), /at least one member must keep role.manage/, '最後の管理者は退部させられない')
+    const status = await client.query<{ member_status: string }>(`select member_status from public.members where member_id = '${admin}'`)
+    assert.equal(status.rows[0].member_status, 'active', '退部が取り消され、在籍のまま')
+    assert.deepEqual(await rolesOf(admin), ['admin', 'member'], 'ロールも残っている')
+  } finally {
+    await client.close()
+  }
+})

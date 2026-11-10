@@ -202,12 +202,26 @@ const normalizeApplication = (input: {
   allergyDetails: input.someAllergy ? input.allergyDetails?.trim() || null : null,
 })
 
-export const conflictForUniqueMemberField = (error: unknown) => {
-  let databaseError = error as { code?: string; constraint?: string; cause?: unknown }
-  for (let depth = 0; depth < 4 && !databaseError.code && databaseError.cause; depth += 1) {
-    databaseError = databaseError.cause as { code?: string; constraint?: string; cause?: unknown }
+// PostgreSQL がエラーの種類を表す 5 桁のコード（SQLSTATE）。
+// 一覧：https://www.postgresql.org/docs/current/errcodes-appendix.html
+const UNIQUE_VIOLATION = '23505' // 一意の決まりに反した（同じ値がすでにある）
+const CHECK_VIOLATION = '23514' // 検査に反した（check 制約や、トリガーでの確認）
+
+type DatabaseError = { code?: string; constraint?: string; message?: string; cause?: unknown }
+
+// Drizzle は、データベースのエラーを別のエラーで包んで投げることがある。
+// 包まれた元のエラーは cause に入っているので、コードを持つエラーが見つかるまで最大 4 段たどる。
+const findDatabaseError = (error: unknown): DatabaseError => {
+  let current = error as DatabaseError
+  for (let depth = 0; depth < 4 && !current.code && current.cause; depth += 1) {
+    current = current.cause as DatabaseError
   }
-  if (databaseError.code !== '23505') return null
+  return current
+}
+
+export const conflictForUniqueMemberField = (error: unknown) => {
+  const databaseError = findDatabaseError(error)
+  if (databaseError.code !== UNIQUE_VIOLATION) return null
   if (databaseError.constraint === 'members_student_id_unique') {
     return { error: 'Student ID is already registered', code: 'student_id_conflict' }
   }
@@ -215,6 +229,16 @@ export const conflictForUniqueMemberField = (error: unknown) => {
     return { error: 'Student email is already registered', code: 'student_email_conflict' }
   }
   return { error: 'Application conflicts with an existing record', code: 'application_conflict' }
+}
+
+// 最後の管理者を退部させようとしたときのエラー（keep_a_role_manager トリガー）を、409 の応答に変える。
+// 退部でロールが外れる（U-6）と、role.manage を持つ人が誰もいなくなるため、データベースが取り消す。
+// トリガーは「検査に反した」（23514）としてエラーを出す。同じコードは他の確認でも使うので、メッセージでも見分ける。
+export const conflictForLastRoleManager = (error: unknown) => {
+  const databaseError = findDatabaseError(error)
+  if (databaseError.code !== CHECK_VIOLATION) return null
+  if (!databaseError.message?.includes('at least one member must keep role.manage')) return null
+  return { error: 'At least one member must keep role.manage', code: 'last_role_manager' }
 }
 
 // Every write to a member row does the same thing: update only while the row is
@@ -928,6 +952,8 @@ export const updateAdminMemberService: RouteHandler<typeof updateAdminMemberRout
     }
     const uniqueConflict = conflictForUniqueMemberField(error)
     if (uniqueConflict) return c.json(uniqueConflict, 409)
+    const lastManager = conflictForLastRoleManager(error)
+    if (lastManager) return c.json(lastManager, 409)
     throw error
   }
 

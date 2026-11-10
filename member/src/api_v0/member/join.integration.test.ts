@@ -10,6 +10,7 @@ import { errorHandler } from '../../core/error'
 import { AdminUpdateMemberSchema, JoinMemberSchema, RejectApplicationSchema, UpdateMemberSchema } from './schema'
 import {
   createApproveMemberService,
+  conflictForLastRoleManager,
   conflictForUniqueMemberField,
   getDirectoryService,
   getMemberService,
@@ -735,6 +736,19 @@ test('wrapped Postgres unique violations map to field-specific API conflicts', (
     error: 'Student email is already registered',
     code: 'student_email_conflict',
   })
+})
+
+test('最後の管理者を退部させるエラーは、409 の last_role_manager になる', () => {
+  assert.deepEqual(conflictForLastRoleManager({
+    cause: { code: '23514', message: 'at least one member must keep role.manage' },
+  }), {
+    error: 'At least one member must keep role.manage',
+    code: 'last_role_manager',
+  })
+  // 同じ 23514 でも、別の決まりに反したエラーは変換しない
+  assert.equal(conflictForLastRoleManager({
+    cause: { code: '23514', message: 'member application version must increase by exactly one' },
+  }), null)
 })
 
 test('internal errors are logged without exposing details to API clients', async () => {
