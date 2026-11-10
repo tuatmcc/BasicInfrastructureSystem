@@ -3,7 +3,9 @@ import { AppContext } from "../core/types"
 
 import { userRouter } from './member/router'
 import { gradeRouter } from './grade/router'
+import { roleRouter } from './role/router'
 
 export const apiv0Router = new OpenAPIHono<AppContext>()
     .route("/member", userRouter)
     .route("/grade", gradeRouter)
+    .route("/role", roleRouter)
