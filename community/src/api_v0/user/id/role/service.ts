@@ -1,6 +1,8 @@
+import { can } from "../../../../../../share/permissions";
 import { RouteHandler } from "@hono/zod-openapi";
 import { AppContext } from "../../../../core/types";
-import { getUserRolesByIdRoute } from "./schema";
+import { getUserRolesByIdRoute, updateUserRolesRoute } from "./schema";
+import { HTTPException } from "hono/http-exception";
 
 export const getUserRolesByIdService: RouteHandler<typeof getUserRolesByIdRoute, AppContext> = async (c) => {
     const userId = c.req.param("id");
@@ -13,4 +15,11 @@ export const getUserRolesByIdService: RouteHandler<typeof getUserRolesByIdRoute,
     }));
 
     return c.json(roles, 200);
+};
+
+export const updateUserRolesService: RouteHandler<typeof updateUserRolesRoute, AppContext> = async (c) => {
+    const user = c.get("appUser");
+    if (!can(user.permissions, "role.manage")) throw new HTTPException(403);
+    const mockRole = { roleId: "r-123", roleName: "admin" };
+    return c.json([mockRole], 200);
 };
